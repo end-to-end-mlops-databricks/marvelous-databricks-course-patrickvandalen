@@ -1,17 +1,11 @@
 import logging
-import subprocess
-import sys
 
 import yaml
 
-
-def install(package):
-    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-
-
-package = "/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl"
-install(package)
-
+# def install(package):
+#     subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+# package = "/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl"
+# install(package)
 from hotel_reservations.data_processor import DataProcessor
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
