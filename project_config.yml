@@ -2,15 +2,11 @@ catalog_name: marvelous_databricks_course_patrickvandalen
 schema_name: hotel_reservations
 
 num_features:
-  - Booking_ID
   - no_of_adults
   - no_of_children
   - no_of_weekend_nights
   - no_of_week_nights
   - lead_time
-  - arrival_year
-  - arrival_month
-  - arrival_date
   - no_of_previous_cancellations
   - no_of_previous_bookings_not_canceled
   - avg_price_per_room
