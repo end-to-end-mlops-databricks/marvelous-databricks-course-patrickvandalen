@@ -19,7 +19,7 @@ print("Configuration loaded:")
 print(yaml.dump(config, default_flow_style=False))
 
 # Initialize DataProcessor
-data_processor = DataProcessor("data/data.csv", config)
+data_processor = DataProcessor("/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/hotel_reservations.csv", config)
 logger.info("DataProcessor initialized.")
 
 # Preprocess the data
