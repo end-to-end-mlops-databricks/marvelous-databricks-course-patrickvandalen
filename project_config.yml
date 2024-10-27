@@ -1,5 +1,5 @@
-catalog_name: marvelous_databricks_course_patrickvandalen
-schema_name: hotel_reservations
+catalog_name: mdl_europe_anz_dev
+schema_name: patrick_mlops
 
 num_features:
   - no_of_adults
