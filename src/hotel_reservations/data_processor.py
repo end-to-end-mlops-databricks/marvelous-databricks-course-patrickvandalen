@@ -13,9 +13,6 @@ class DataProcessor:
     def __init__(self, filepath, config):
         self.df = self.load_data(filepath)
         self.config = config
-        # self.X = None
-        # self.y = None
-        # self.preprocessor = None
         self.train_table_uc = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "train_set"
         self.test_table_uc = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "test_set"
         self.function_name = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "calculate_house_age"
@@ -108,7 +105,7 @@ class DataProcessor:
         self.create_feature_function(spark=spark)
 
         training_set = FeatureEngineeringClient().create_training_set(
-            df=train_set_spark.withColumn("TotalNoWeekNights", train_set["TotalNoWeekNights"].cast("int")),
+            df=train_set_spark.withColumn("TotalNoWeekNights", train_set_spark["TotalNoWeekNights"].cast("int")),
             label=self.config["target"],
             feature_lookups=[
                 FeatureFunction(
