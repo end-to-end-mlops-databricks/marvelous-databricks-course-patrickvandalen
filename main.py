@@ -20,6 +20,8 @@ def install(package):
 
 # dbutils.library.restartPython() 
 
+print("Hello")
+
 from hotel_reservations.data_processor import DataProcessor
 from hotel_reservations.mlflow_processor import MLFlowProcessor
 
