@@ -107,10 +107,8 @@ class DataProcessor:
 
         self.create_feature_function(spark=spark)
 
-        train_set_spark = train_set_spark.withColumn("TotalNoWeekNights", train_set["TotalNoWeekNights"].cast("int"))
-
         training_set = FeatureEngineeringClient().create_training_set(
-            df=train_set_spark,
+            df=train_set_spark.withColumn("TotalNoWeekNights", train_set["TotalNoWeekNights"].cast("int")),
             label=self.config["target"],
             feature_lookups=[
                 FeatureFunction(
@@ -121,3 +119,6 @@ class DataProcessor:
             ],
             exclude_columns=["update_timestamp_utc"]
         )
+
+        return training_set
+

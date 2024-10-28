@@ -55,7 +55,7 @@ train_set_spark, test_set_spark, X_train, y_train, X_test, y_test = data_process
 logger.info("Data read from catalog.")
 
 # Feature Engineering
-train_set_spark = data_processor.feature_engineering(train_set_spark, spark=spark)
+train_set_spark, X_train, y_train = data_processor.feature_engineering(train_set_spark, spark=spark)
 logger.info("Feature Engineering completed.")
 
 # # Initialize MLFlow Processor
