@@ -92,7 +92,7 @@ class DataProcessor:
 
         return train_set_spark, test_set_spark, X_train, y_train, X_test, y_test
     
-    def create_feature_function(self):
+    def create_feature_function(self, spark: SparkSession):
         
         spark.sql(f"""
         CREATE OR REPLACE FUNCTION {self.function_name}(total_no_week_nights INT)
@@ -103,21 +103,21 @@ class DataProcessor:
         $$
         """)
 
-    # def feature_engineering_setup(self, train_set):
+    def feature_engineering(self, train_set_spark, spark: SparkSession):
 
-    #     self.data_processor.create_feature_function()
+        self.create_feature_function(spark=spark)
 
-    #     train_set = train_set.withColumn("TotalNoWeekNights", train_set["TotalNoWeekNights"].cast("int"))
+        train_set_spark = train_set_spark.withColumn("TotalNoWeekNights", train_set["TotalNoWeekNights"].cast("int"))
 
-    #     training_set = FeatureEngineeringClient().create_training_set(
-    #         df=train_set,
-    #         label=self.config["target"],
-    #         feature_lookups=[
-    #             FeatureFunction(
-    #                 udf_name=self.function_name,
-    #                 output_name="TotalNoWeekNights",
-    #                 input_bindings={"total_no_week_nights": "TotalNoWeekNights"},
-    #             )
-    #         ],
-    #         exclude_columns=["update_timestamp_utc"]
-    #     )
+        training_set = FeatureEngineeringClient().create_training_set(
+            df=train_set_spark,
+            label=self.config["target"],
+            feature_lookups=[
+                FeatureFunction(
+                    udf_name=self.function_name,
+                    output_name="TotalNoWeekNights",
+                    input_bindings={"total_no_week_nights": "TotalNoWeekNights"},
+                )
+            ],
+            exclude_columns=["update_timestamp_utc"]
+        )

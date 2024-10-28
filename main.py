@@ -12,18 +12,16 @@ def install(package):
 # package = "/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl"
 # install(package)
 
-# package = "lightgbm"
-# install(package)
+package = "lightgbm"
+install(package)
 
-# package = "databricks-feature-engineering"
-# install(package)
+package = "databricks-feature-engineering"
+install(package)
 
-# dbutils.library.restartPython() 
+dbutils.library.restartPython() 
 
-print("Hello")
-
-from hotel_reservations.data_processor import DataProcessor
-from hotel_reservations.mlflow_processor import MLFlowProcessor
+from src.hotel_reservations.data_processor import DataProcessor
+from src.hotel_reservations.mlflow_processor import MLFlowProcessor
 
 spark = SparkSession.builder.getOrCreate()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -56,9 +54,9 @@ logger.info("Data saved to catalog.")
 train_set_spark, test_set_spark, X_train, y_train, X_test, y_test = data_processor.read_from_catalog(spark=spark)
 logger.info("Data read from catalog.")
 
-# # Feature Engineering
-# train_set_spark = data_processor.feature_engineering(train_set_spark)
-# logger.info("Feature Engineering completed.")
+# Feature Engineering
+train_set_spark = data_processor.feature_engineering(train_set_spark, spark=spark)
+logger.info("Feature Engineering completed.")
 
 # # Initialize MLFlow Processor
 # model = MLFlowProcessor(data_processor.preprocessor, config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test)
