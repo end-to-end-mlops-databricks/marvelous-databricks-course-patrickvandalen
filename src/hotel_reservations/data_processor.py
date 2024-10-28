@@ -6,6 +6,8 @@ from sklearn.impute import SimpleImputer
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from databricks import feature_engineering
+from databricks.feature_engineering import FeatureFunction, FeatureLookup
 
 class DataProcessor:
     def __init__(self, filepath, config):
@@ -16,10 +18,11 @@ class DataProcessor:
         # self.preprocessor = None
         self.train_table_uc = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "train_set"
         self.test_table_uc = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "test_set"
+        self.function_name = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "calculate_house_age"
 
     def load_data(self, filepath):
-        return pd.read_csv(filepath)
-
+        return pd.read_csv(filepath)    
+   
     def preprocess_data(self):
         # Remove rows with missing target
         target = self.config["target"]
@@ -70,8 +73,8 @@ class DataProcessor:
           "SET TBLPROPERTIES (delta.enableChangeDataFeed = true);")
         
         spark.sql(f"ALTER TABLE {self.test_table_uc} "
-          "SET TBLPROPERTIES (delta.enableChangeDataFeed = true);")
-        
+          "SET TBLPROPERTIES (delta.enableChangeDataFeed = true);")        
+    
     def read_from_catalog(self, spark: SparkSession):
         """Read the train and test sets from Databricks tables."""
 
@@ -88,3 +91,33 @@ class DataProcessor:
         y_test = test_set[self.config["target"]]
 
         return train_set_spark, test_set_spark, X_train, y_train, X_test, y_test
+    
+    def create_feature_function(self):
+        
+        spark.sql(f"""
+        CREATE OR REPLACE FUNCTION {self.function_name}(total_no_week_nights INT)
+        RETURNS INT
+        LANGUAGE PYTHON AS
+        $$
+        return no_of_weekend_nights + no_of_week_nights
+        $$
+        """)
+
+    # def feature_engineering_setup(self, train_set):
+
+    #     self.data_processor.create_feature_function()
+
+    #     train_set = train_set.withColumn("TotalNoWeekNights", train_set["TotalNoWeekNights"].cast("int"))
+
+    #     training_set = FeatureEngineeringClient().create_training_set(
+    #         df=train_set,
+    #         label=self.config["target"],
+    #         feature_lookups=[
+    #             FeatureFunction(
+    #                 udf_name=self.function_name,
+    #                 output_name="TotalNoWeekNights",
+    #                 input_bindings={"total_no_week_nights": "TotalNoWeekNights"},
+    #             )
+    #         ],
+    #         exclude_columns=["update_timestamp_utc"]
+    #     )

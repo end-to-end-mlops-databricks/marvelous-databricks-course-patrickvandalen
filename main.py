@@ -12,11 +12,16 @@ def install(package):
 # package = "/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl"
 # install(package)
 
-package = "lightgbm"
-install(package)
+# package = "lightgbm"
+# install(package)
 
-from src.hotel_reservations.data_processor import DataProcessor
-from src.hotel_reservations.mlflow_processor import MLFlowProcessor
+# package = "databricks-feature-engineering"
+# install(package)
+
+# dbutils.library.restartPython() 
+
+from hotel_reservations.data_processor import DataProcessor
+from hotel_reservations.mlflow_processor import MLFlowProcessor
 
 spark = SparkSession.builder.getOrCreate()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -49,40 +54,44 @@ logger.info("Data saved to catalog.")
 train_set_spark, test_set_spark, X_train, y_train, X_test, y_test = data_processor.read_from_catalog(spark=spark)
 logger.info("Data read from catalog.")
 
-# Initialize MLFlow Processor
-model = MLFlowProcessor(data_processor.preprocessor, config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test)
-logger.info("MLFlow Processor initialized.")
+# # Feature Engineering
+# train_set_spark = data_processor.feature_engineering(train_set_spark)
+# logger.info("Feature Engineering completed.")
 
-# Start an MLflow run to track the training process
-mlflow.set_experiment(experiment_name=config["experiment_name"])
-mlflow.set_experiment_tags({"repository_name": config["repository_name"]})
-git_sha = "ffa63b430205ff7"
+# # Initialize MLFlow Processor
+# model = MLFlowProcessor(data_processor.preprocessor, config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test)
+# logger.info("MLFlow Processor initialized.")
 
-with mlflow.start_run(
-    tags={"git_sha": f"{git_sha}",
-        "branch": config["branch"]},
-) as run:
-    run_id = run.info.run_id
+# # Start an MLflow run to track the training process
+# mlflow.set_experiment(experiment_name=config["experiment_name"])
+# mlflow.set_experiment_tags({"repository_name": config["repository_name"]})
+# git_sha = "ffa63b430205ff7"
 
-    # Train model and create MLFlow experiment
-    model.train()
-    logger.info("Model training and MLFlow experiment created.")
+# with mlflow.start_run(
+#     tags={"git_sha": f"{git_sha}",
+#         "branch": config["branch"]},
+# ) as run:
+#     run_id = run.info.run_id
 
-    # Evaluate model and log metrics to MLFlow experiment
-    model.evaluate()
-    logger.info("Model evaluated and logged in MLFlow experiment.")
+#     # Train model and create MLFlow experiment
+#     model.train()
+#     logger.info("Model training and MLFlow experiment created.")
 
-    # Log model to MLFlow experiment
-    model.log_model()
-    logger.info("Model logged to MLFlow experiment.")
+#     # Evaluate model and log metrics to MLFlow experiment
+#     model.evaluate()
+#     logger.info("Model evaluated and logged in MLFlow experiment.")
 
-    # Register model to MLFlow
-    run_id, model_version = model.register_model(git_sha)
-    logger.info("Model register to MLFlow.")
+#     # Log model to MLFlow experiment
+#     model.log_model()
+#     logger.info("Model logged to MLFlow experiment.")
 
-    # Load dataset from registered model
-    dataset_source = model.load_dataset_from_model(run_id)
-    dataset_source.load()
-    logger.info("Dataset loaded from registered model.")
+#     # Register model to MLFlow
+#     run_id, model_version = model.register_model(git_sha)
+#     logger.info("Model register to MLFlow.")
+
+#     # Load dataset from registered model
+#     dataset_source = model.load_dataset_from_model(run_id)
+#     dataset_source.load()
+#     logger.info("Dataset loaded from registered model.")
 
 print("Hello")
