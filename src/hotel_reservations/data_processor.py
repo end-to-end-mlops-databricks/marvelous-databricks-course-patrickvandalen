@@ -11,9 +11,11 @@ class DataProcessor:
     def __init__(self, filepath, config):
         self.df = self.load_data(filepath)
         self.config = config
-        self.X = None
-        self.y = None
-        self.preprocessor = None
+        # self.X = None
+        # self.y = None
+        # self.preprocessor = None
+        self.train_table_uc = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "train_set"
+        self.test_table_uc = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "test_set"
 
     def load_data(self, filepath):
         return pd.read_csv(filepath)
@@ -39,7 +41,6 @@ class DataProcessor:
             ]
         )
 
-        # Combine preprocessing steps
         self.preprocessor = ColumnTransformer(
             transformers=[
                 ("num", numeric_transformer, self.config["num_features"]),
@@ -62,14 +63,28 @@ class DataProcessor:
         test_set_with_timestamp = spark.createDataFrame(test_set).withColumn(
             "update_timestamp_utc", to_utc_timestamp(current_timestamp(), "UTC"))
         
-        train_table_uc = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "train_set"
-        test_table_uc = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "test_set"
+        train_set_with_timestamp.write.mode("append").saveAsTable(self.train_table_uc)
+        test_set_with_timestamp.write.mode("append").saveAsTable(self.test_table_uc)
 
-        train_set_with_timestamp.write.mode("append").saveAsTable(train_table_uc)
-        test_set_with_timestamp.write.mode("append").saveAsTable(test_table_uc)
-
-        spark.sql(f"ALTER TABLE {train_table_uc} "
+        spark.sql(f"ALTER TABLE {self.train_table_uc} "
           "SET TBLPROPERTIES (delta.enableChangeDataFeed = true);")
         
-        spark.sql(f"ALTER TABLE {test_table_uc} "
+        spark.sql(f"ALTER TABLE {self.test_table_uc} "
           "SET TBLPROPERTIES (delta.enableChangeDataFeed = true);")
+        
+    def read_from_catalog(self, spark: SparkSession):
+        """Read the train and test sets from Databricks tables."""
+
+        train_set_spark = spark.sql(f'select * from {self.train_table_uc}')
+        test_set_spark = spark.sql(f'select * from {self.test_table_uc}')
+
+        train_set = train_set_spark.toPandas()
+        test_set = test_set_spark.toPandas()
+
+        X_train = train_set[self.config["num_features"] + self.config["cat_features"]]
+        y_train = train_set[self.config["target"]]
+
+        X_test = test_set[self.config["num_features"] + self.config["cat_features"]]
+        y_test = test_set[self.config["target"]]
+
+        return train_set_spark, test_set_spark, X_train, y_train, X_test, y_test

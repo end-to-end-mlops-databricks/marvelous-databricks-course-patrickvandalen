@@ -3,15 +3,20 @@ import yaml
 import json
 import mlflow
 from pyspark.sql import SparkSession
+import subprocess
+import sys
 
-# import subprocess
-# import sys
-# def install(package):
-#     subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+def install(package):
+    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+
 # package = "/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl"
 # install(package)
 
+package = "lightgbm"
+install(package)
+
 from src.hotel_reservations.data_processor import DataProcessor
+from src.hotel_reservations.mlflow_processor import MLFlowProcessor
 
 spark = SparkSession.builder.getOrCreate()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -40,44 +45,44 @@ logger.info("Train and Test data splitted.")
 data_processor.save_to_catalog(train_set=train_set, test_set=test_set, spark=spark)
 logger.info("Data saved to catalog.")
 
-# Create mlflow experiment
-mlflow.set_tracking_uri("databricks")
-mlflow.set_experiment("/Shared/Hotel_Reservations")
-mlflow.set_experiment_tags({"repository_name": "Patrick_MLOps"})
+# Read data from catalog
+train_set_spark, test_set_spark, X_train, y_train, X_test, y_test = data_processor.read_from_catalog(spark=spark)
+logger.info("Data read from catalog.")
 
-experiments = mlflow.search_experiments(
-    filter_string="tags.repository_name='Patrick_MLOps'"
-)
+# Initialize MLFlow Processor
+model = MLFlowProcessor(data_processor.preprocessor, config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test)
+logger.info("MLFlow Processor initialized.")
 
-print(experiments)
+# Start an MLflow run to track the training process
+mlflow.set_experiment(experiment_name=config["experiment_name"])
+mlflow.set_experiment_tags({"repository_name": config["repository_name"]})
+git_sha = "ffa63b430205ff7"
 
-# Write mlflow experiment to json file
-with open("mlflow_experiment.json", "w") as json_file:
-    json.dump(experiments[0].__dict__, json_file, indent=4)
-
-# Start MLFlow run
 with mlflow.start_run(
-    run_name="demo_run",
-    tags={"git_sha": "ffa63b430205ff7",
-          "branch": "week2"},
-    description="demo run",
+    tags={"git_sha": f"{git_sha}",
+        "branch": config["branch"]},
 ) as run:
-    mlflow.log_params({"type": "demo"})
-    mlflow.log_metrics({"metric1": 1.0, "metric2": 2.0})
+    run_id = run.info.run_id
 
-# Get Run info
-run_id = mlflow.search_runs(
-    experiment_names=["/Shared/Hotel_Reservations"],
-    filter_string="tags.git_sha='ffa63b430205ff7'",
-).run_id[0]
+    # Train model and create MLFlow experiment
+    model.train()
+    logger.info("Model training and MLFlow experiment created.")
 
-run_info = mlflow.get_run(run_id=f"{run_id}").to_dictionary()
+    # Evaluate model and log metrics to MLFlow experiment
+    model.evaluate()
+    logger.info("Model evaluated and logged in MLFlow experiment.")
 
-print(run_info)
-print(run_info["data"]["metrics"])
-print(run_info["data"]["params"])
+    # Log model to MLFlow experiment
+    model.log_model()
+    logger.info("Model logged to MLFlow experiment.")
 
-# Write run info to json file
-with open("run_info.json", "w") as json_file:
-    json.dump(run_info, json_file, indent=4)
+    # Register model to MLFlow
+    run_id, model_version = model.register_model(git_sha)
+    logger.info("Model register to MLFlow.")
 
+    # Load dataset from registered model
+    dataset_source = model.load_dataset_from_model(run_id)
+    dataset_source.load()
+    logger.info("Dataset loaded from registered model.")
+
+print("Hello")

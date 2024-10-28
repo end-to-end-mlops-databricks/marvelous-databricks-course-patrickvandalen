@@ -1,6 +1,15 @@
 catalog_name: mdl_europe_anz_dev
 schema_name: patrick_mlops
 
+repository_name: "Patrick_MLOps"
+experiment_name: "/Shared/Hotel_Reservations"
+branch: "week2"
+
+parameters:
+  learning_rate: 0.01
+  n_estimators: 1000
+  max_depth: 6
+
 num_features:
   - no_of_adults
   - no_of_children
