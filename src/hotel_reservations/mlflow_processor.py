@@ -11,7 +11,7 @@ import mlflow
 from mlflow import MlflowClient
 from mlflow.models import infer_signature
 from databricks import feature_engineering
-from src.hotel_reservations.utils import adjust_predictions
+from hotel_reservations.utils import adjust_predictions
 
 mlflow.set_tracking_uri("databricks")
 mlflow.set_registry_uri('databricks-uc') # It must be -uc for registering models to Unity Catalog
