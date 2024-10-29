@@ -65,12 +65,8 @@ class DataProcessor:
         """)
 
         spark.sql(f"ALTER TABLE {self.fe_table_name} " "ADD CONSTRAINT hotel_reservations_pk PRIMARY KEY(Booking_ID);")
-
-        spark.sql(f"ALTER TABLE {self.fe_table_name} " "SET TBLPROPERTIES (delta.enableChangeDataFeed = true);")
-
-        spark.sql(
-            f"INSERT INTO {self.fe_table_name} " f"SELECT Booking_ID, type_of_meal_plan FROM {self.train_table_uc}"
-        )
+        spark.sql(f"ALTER TABLE {self.fe_table_name} " "SET TBLPROPERTIES (delta.enableChangeDataFeed = true);")                
+        spark.sql(f"INSERT INTO {self.fe_table_name} " f"SELECT Booking_ID, type_of_meal_plan FROM {self.train_table_uc}")
 
     def create_feature_function(self, spark: SparkSession):
         spark.sql(f"""
