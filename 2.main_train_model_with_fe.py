@@ -18,21 +18,7 @@ install(package)
 package = "databricks-feature-engineering"
 install(package)
 
-spark = SparkSession.builder.getOrCreate()
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger(__name__)
-
-def get_dbutils(spark):
-        try:
-            from pyspark.dbutils import DBUtils
-            dbutils = DBUtils(spark)
-        except ImportError:
-            import IPython
-            dbutils = IPython.get_ipython().user_ns["dbutils"]
-        return dbutils
-
-dbutils = get_dbutils(spark)
-dbutils.library.restartPython()
+dbutils.library.restartPython() 
 
 from src.hotel_reservations.data_processor import DataProcessor
 from src.hotel_reservations.mlflow_processor import MLFlowProcessor
@@ -103,7 +89,5 @@ with mlflow.start_run(
     dataset_source = model.load_dataset_from_model(run_id)
     dataset_source.load()
     logger.info("Dataset loaded from registered model.")
-
-    print(dataset_source)
 
 print("Hello")
