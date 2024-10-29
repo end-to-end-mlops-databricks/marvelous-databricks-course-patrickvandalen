@@ -1,5 +1,6 @@
 import pandas as pd
 from pyspark.sql import SparkSession
+from pyspark.sql import functions as F
 from pyspark.sql.functions import current_timestamp, to_utc_timestamp
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
@@ -66,7 +67,7 @@ class DataProcessor:
         $$
         """)
 
-    def feature_engineering(self, train_set_spark, spark: SparkSession):
+    def feature_engineering(self, train_set_spark, test_set_spark, spark: SparkSession):
         self.create_feature_function(spark=spark)
 
         fe = feature_engineering.FeatureEngineeringClient()
@@ -85,8 +86,9 @@ class DataProcessor:
         )
 
         train_set_spark = training_set.load_df()
+        test_set_spark = test_set_spark.withColumn('TotalNoNights', F.col('no_of_week_nights') + F.col('no_of_weekend_nights'))
 
-        return training_set, train_set_spark
+        return training_set, train_set_spark, test_set_spark
     
     def get_X_y_datasets(self, train_set_spark, test_set_spark, spark: SparkSession, func_features = []):
         """Read the train and test sets from Databricks tables."""

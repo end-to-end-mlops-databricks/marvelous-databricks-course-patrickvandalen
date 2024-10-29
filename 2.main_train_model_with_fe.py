@@ -37,7 +37,7 @@ train_set_spark, test_set_spark = data_processor.save_to_catalog(train_set=train
 logger.info("Data saved to catalog.")
 
 # Feature Engineering
-training_set, train_set_spark = data_processor.feature_engineering(train_set_spark, spark=spark)
+training_set, train_set_spark, test_set_spark = data_processor.feature_engineering(train_set_spark, test_set_spark, spark=spark)
 logger.info("Feature Engineering completed.")
 
 # Split into X an y datasets
