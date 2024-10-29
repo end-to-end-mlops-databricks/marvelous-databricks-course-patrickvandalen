@@ -41,7 +41,7 @@ training_set, train_set_spark = data_processor.feature_engineering(train_set_spa
 logger.info("Feature Engineering completed.")
 
 # Split into X an y datasets
-X_train, y_train, X_test, y_test = data_processor.get_X_y_datasets(train_set_spark, test_set_spark, spark=spark)
+X_train, y_train, X_test, y_test = data_processor.get_X_y_datasets(train_set_spark, test_set_spark, spark=spark, func_features = config["func_features"] )
 logger.info("Data read from catalog.")
 
 # Initialize MLFlow Processor

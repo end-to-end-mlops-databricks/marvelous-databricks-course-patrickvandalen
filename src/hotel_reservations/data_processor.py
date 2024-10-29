@@ -88,16 +88,16 @@ class DataProcessor:
 
         return training_set, train_set_spark
     
-    def get_X_y_datasets(self, train_set_spark, test_set_spark, spark: SparkSession):
+    def get_X_y_datasets(self, train_set_spark, test_set_spark, spark: SparkSession, func_features = []):
         """Read the train and test sets from Databricks tables."""
 
         train_set = train_set_spark.toPandas()
         test_set = test_set_spark.toPandas()
 
-        X_train = train_set[self.config["num_features"] + self.config["cat_features"]]
+        X_train = train_set[self.config["num_features"] + self.config["cat_features"] + func_features]
         y_train = train_set[self.config["target"]]
 
-        X_test = test_set[self.config["num_features"] + self.config["cat_features"]]
+        X_test = test_set[self.config["num_features"] + self.config["cat_features"] + func_features]
         y_test = test_set[self.config["target"]]
 
         return X_train, y_train, X_test, y_test

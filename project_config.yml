@@ -28,4 +28,7 @@ cat_features:
   - market_segment_type
   - repeated_guest
 
+func_features:
+ - TotalNoNights
+
 target: booking_status
