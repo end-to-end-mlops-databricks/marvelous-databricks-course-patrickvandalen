@@ -137,7 +137,7 @@ class MLFlowProcessor:
         mlflow.pyfunc.log_model(
             python_model=self.wrapped_model,
             artifact_path="lightgbm-pipeline-model",
-            code_paths = ["../mlops_with_databricks-0.0.1-py3-none-any.whl"],
+            code_paths = ["/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl"],
             signature=signature
         )
 
@@ -163,7 +163,7 @@ class MLFlowProcessor:
         return loaded_model
     
     def load_custom_model(self, run_id):
-        loaded_model = mlflow.pyfunc.load_model(f'runs:/{run_id}/pyfunc-house-price-model')
+        loaded_model = mlflow.pyfunc.load_model(f'runs:/{run_id}/lightgbm-pipeline-model')
         loaded_model.unwrap_python_model()
 
         return loaded_model
@@ -181,7 +181,7 @@ class MLFlowProcessor:
         return model_version_by_alias
     
     def get_model_version_by_tag(self, git_sha):
-        filter_string = f"name='{self.model_name}' and tags.tag='{tag}'"
+        filter_string = f"name='{self.model_name}' and tags.tag='{git_sha}'"
         model_version_by_tag = client.search_model_versions(filter_string)
         
         return model_version_by_tag

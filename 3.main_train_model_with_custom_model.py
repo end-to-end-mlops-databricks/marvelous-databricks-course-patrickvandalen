@@ -6,12 +6,12 @@ from pyspark.sql import SparkSession
 import subprocess
 import sys
 
-for package in ["/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl"]:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-dbutils.library.restartPython()
+# for package in ["/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl"]:
+#     subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+# dbutils.library.restartPython()
 
-from src.hotel_reservations.data_processor import DataProcessor
-from src.hotel_reservations.mlflow_processor import MLFlowProcessor
+from hotel_reservations.data_processor import DataProcessor
+from hotel_reservations.mlflow_processor import MLFlowProcessor
 
 spark = SparkSession.builder.getOrCreate()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -84,7 +84,7 @@ with mlflow.start_run(
     logger.info("Model register to MLFlow.")
 
 # Load custom model
-loaded_model = model.load_custom_model()
+loaded_model = model.load_custom_model(run_id)
 
 # Load dataset from registered model
 dataset_source = model.load_dataset_from_model(run_id)
