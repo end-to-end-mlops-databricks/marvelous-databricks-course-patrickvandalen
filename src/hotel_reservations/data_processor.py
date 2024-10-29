@@ -1,11 +1,10 @@
 import pandas as pd
 from databricks import feature_engineering
-from databricks.feature_engineering import FeatureFunction
+from databricks.feature_engineering import FeatureFunction, FeatureLookup
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.functions import current_timestamp, to_utc_timestamp
 from sklearn.model_selection import train_test_split
-
 
 class DataProcessor:
     def __init__(self, filepath, config):
@@ -13,6 +12,7 @@ class DataProcessor:
         self.config = config
         self.train_table_uc = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "train_set"
         self.test_table_uc = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "test_set"
+        self.fe_table_name = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "fe_table"
         self.fe_function_name = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "fe_function"
 
     def load_data(self, filepath):
@@ -49,13 +49,28 @@ class DataProcessor:
         test_set_with_timestamp.write.mode("append").saveAsTable(self.test_table_uc)
 
         spark.sql(f"ALTER TABLE {self.train_table_uc} " "SET TBLPROPERTIES (delta.enableChangeDataFeed = true);")
-
         spark.sql(f"ALTER TABLE {self.test_table_uc} " "SET TBLPROPERTIES (delta.enableChangeDataFeed = true);")
 
         train_set_spark = spark.sql(f"select * from {self.train_table_uc}")
         test_set_spark = spark.sql(f"select * from {self.test_table_uc}")
 
         return train_set_spark, test_set_spark
+    
+    def create_feature_table(self, spark: SparkSession):
+        spark.sql(f"""
+        CREATE OR REPLACE TABLE {self.fe_table_name}
+        (Booking_ID STRING NOT NULL,
+        type_of_meal_plan STRING);
+        """)
+
+        spark.sql(f"ALTER TABLE {self.fe_table_name} "
+                "ADD CONSTRAINT hotel_reservations_pk PRIMARY KEY(Booking_ID);")
+
+        spark.sql(f"ALTER TABLE {self.fe_table_name} "
+                "SET TBLPROPERTIES (delta.enableChangeDataFeed = true);")
+
+        spark.sql(f"INSERT INTO {self.fe_table_name} "
+                f"SELECT Booking_ID, type_of_meal_plan FROM {self.train_table_uc}")
 
     def create_feature_function(self, spark: SparkSession):
         spark.sql(f"""
@@ -68,6 +83,7 @@ class DataProcessor:
         """)
 
     def feature_engineering(self, train_set_spark, test_set_spark, spark: SparkSession):
+        self.create_feature_table(spark=spark)
         self.create_feature_function(spark=spark)
 
         fe = feature_engineering.FeatureEngineeringClient()
@@ -75,9 +91,14 @@ class DataProcessor:
         training_set = fe.create_training_set(
             df=train_set_spark.withColumn(
                 "no_of_week_nights", train_set_spark["no_of_week_nights"].cast("int")
-            ).withColumn("no_of_weekend_nights", train_set_spark["no_of_weekend_nights"].cast("int")),
+            ).withColumn("no_of_weekend_nights", train_set_spark["no_of_weekend_nights"].cast("int")).drop('type_of_meal_plan'),
             label=self.config["target"],
             feature_lookups=[
+                FeatureLookup(
+                    table_name=self.fe_table_name,
+                    feature_names=["type_of_meal_plan"],
+                    lookup_key="Booking_ID",
+                ),
                 FeatureFunction(
                     udf_name=self.fe_function_name,
                     output_name="TotalNoNights",

@@ -22,6 +22,7 @@ num_features:
   - no_of_special_requests
 
 cat_features:
+  - Booking_ID
   - type_of_meal_plan
   - required_car_parking_space
   - room_type_reserved

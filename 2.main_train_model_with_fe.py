@@ -1,5 +1,4 @@
 import logging
-
 import mlflow
 import yaml
 from pyspark.sql import SparkSession
@@ -9,6 +8,7 @@ from pyspark.sql import SparkSession
 # for package in ["/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl"]:
 #     subprocess.check_call([sys.executable, "-m", "pip", "install", package])
 # dbutils.library.restartPython()
+
 from hotel_reservations.data_processor import DataProcessor
 from hotel_reservations.mlflow_processor import MLFlowProcessor
 
