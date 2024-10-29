@@ -1,11 +1,11 @@
 import pandas as pd
+from databricks import feature_engineering
+from databricks.feature_engineering import FeatureFunction
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.functions import current_timestamp, to_utc_timestamp
 from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
-from databricks import feature_engineering
-from databricks.feature_engineering import FeatureFunction, FeatureLookup
+
 
 class DataProcessor:
     def __init__(self, filepath, config):
@@ -16,8 +16,8 @@ class DataProcessor:
         self.fe_function_name = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "fe_function"
 
     def load_data(self, filepath):
-        return pd.read_csv(filepath)   
-    
+        return pd.read_csv(filepath)
+
     def split_data(self, test_size=0.2, random_state=42):
         # Remove rows with missing target
         target = self.config["target"]
@@ -38,26 +38,26 @@ class DataProcessor:
         """Save the train and test sets into Databricks tables."""
 
         train_set_with_timestamp = spark.createDataFrame(train_set).withColumn(
-            "update_timestamp_utc", to_utc_timestamp(current_timestamp(), "UTC"))   
-        
+            "update_timestamp_utc", to_utc_timestamp(current_timestamp(), "UTC")
+        )
+
         test_set_with_timestamp = spark.createDataFrame(test_set).withColumn(
-            "update_timestamp_utc", to_utc_timestamp(current_timestamp(), "UTC"))        
-       
+            "update_timestamp_utc", to_utc_timestamp(current_timestamp(), "UTC")
+        )
+
         train_set_with_timestamp.write.mode("append").saveAsTable(self.train_table_uc)
         test_set_with_timestamp.write.mode("append").saveAsTable(self.test_table_uc)
 
-        spark.sql(f"ALTER TABLE {self.train_table_uc} "
-          "SET TBLPROPERTIES (delta.enableChangeDataFeed = true);")
-        
-        spark.sql(f"ALTER TABLE {self.test_table_uc} "
-          "SET TBLPROPERTIES (delta.enableChangeDataFeed = true);") 
+        spark.sql(f"ALTER TABLE {self.train_table_uc} " "SET TBLPROPERTIES (delta.enableChangeDataFeed = true);")
 
-        train_set_spark = spark.sql(f'select * from {self.train_table_uc}')
-        test_set_spark = spark.sql(f'select * from {self.test_table_uc}')
+        spark.sql(f"ALTER TABLE {self.test_table_uc} " "SET TBLPROPERTIES (delta.enableChangeDataFeed = true);")
 
-        return train_set_spark, test_set_spark    
-           
-    def create_feature_function(self, spark: SparkSession):        
+        train_set_spark = spark.sql(f"select * from {self.train_table_uc}")
+        test_set_spark = spark.sql(f"select * from {self.test_table_uc}")
+
+        return train_set_spark, test_set_spark
+
+    def create_feature_function(self, spark: SparkSession):
         spark.sql(f"""
         CREATE OR REPLACE FUNCTION {self.fe_function_name}(NoWeekNights INT, NoWeekendNights INT)
         RETURNS INT
@@ -73,7 +73,9 @@ class DataProcessor:
         fe = feature_engineering.FeatureEngineeringClient()
 
         training_set = fe.create_training_set(
-            df=train_set_spark.withColumn("no_of_week_nights", train_set_spark["no_of_week_nights"].cast("int")).withColumn("no_of_weekend_nights", train_set_spark["no_of_weekend_nights"].cast("int")),
+            df=train_set_spark.withColumn(
+                "no_of_week_nights", train_set_spark["no_of_week_nights"].cast("int")
+            ).withColumn("no_of_weekend_nights", train_set_spark["no_of_weekend_nights"].cast("int")),
             label=self.config["target"],
             feature_lookups=[
                 FeatureFunction(
@@ -82,19 +84,24 @@ class DataProcessor:
                     input_bindings={"NoWeekNights": "no_of_week_nights", "NoWeekendNights": "no_of_weekend_nights"},
                 )
             ],
-            exclude_columns=["update_timestamp_utc"]
+            exclude_columns=["update_timestamp_utc"],
         )
 
         train_set_spark = training_set.load_df()
-        test_set_spark = test_set_spark.withColumn('TotalNoNights', F.col('no_of_week_nights') + F.col('no_of_weekend_nights'))
+        test_set_spark = test_set_spark.withColumn(
+            "TotalNoNights", F.col("no_of_week_nights") + F.col("no_of_weekend_nights")
+        )
 
         return training_set, train_set_spark, test_set_spark
-    
-    def get_X_y_datasets(self, train_set_spark, test_set_spark, spark: SparkSession, func_features = []):
+
+    def get_X_y_datasets(self, train_set_spark, test_set_spark, spark: SparkSession, func_features=None):
         """Read the train and test sets from Databricks tables."""
 
         train_set = train_set_spark.toPandas()
         test_set = test_set_spark.toPandas()
+
+        if func_features is None:
+            func_features = []
 
         X_train = train_set[self.config["num_features"] + self.config["cat_features"] + func_features]
         y_train = train_set[self.config["target"]]
@@ -103,4 +110,3 @@ class DataProcessor:
         y_test = test_set[self.config["target"]]
 
         return X_train, y_train, X_test, y_test
-

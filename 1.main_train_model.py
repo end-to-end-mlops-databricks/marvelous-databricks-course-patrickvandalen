@@ -1,7 +1,7 @@
 import logging
-import yaml
-import json
+
 import mlflow
+import yaml
 from pyspark.sql import SparkSession
 
 # import subprocess
@@ -9,7 +9,6 @@ from pyspark.sql import SparkSession
 # for package in ["/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl"]:
 #     subprocess.check_call([sys.executable, "-m", "pip", "install", package])
 # dbutils.library.restartPython()
-
 from hotel_reservations.data_processor import DataProcessor
 from hotel_reservations.mlflow_processor import MLFlowProcessor
 
@@ -54,8 +53,7 @@ mlflow.set_experiment_tags({"repository_name": config["repository_name"]})
 git_sha = "ffa63b430205ff7"
 
 with mlflow.start_run(
-    tags={"git_sha": f"{git_sha}",
-        "branch": config["branch"]},
+    tags={"git_sha": f"{git_sha}", "branch": config["branch"]},
 ) as run:
     run_id = run.info.run_id
 
