@@ -6,12 +6,12 @@ from pyspark.sql import SparkSession
 import subprocess
 import sys
 
-# for package in ["/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl", "databricks-feature-engineering"]:
-#     subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-# dbutils.library.restartPython()
+for package in ["/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl"]:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+dbutils.library.restartPython()
 
-from hotel_reservations.data_processor import DataProcessor
-from hotel_reservations.mlflow_processor import MLFlowProcessor
+from src.hotel_reservations.data_processor import DataProcessor
+from src.hotel_reservations.mlflow_processor import MLFlowProcessor
 
 spark = SparkSession.builder.getOrCreate()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -63,8 +63,12 @@ with mlflow.start_run(
     model.train()
     logger.info("Model training and MLFlow experiment created.")
 
+    # Create predictions
+    model.predict()
+    logger.info("Model predictions created.")
+
     # Wrap custom model
-    model.wrap_model()
+    model.model_wrapper(X_test)
     logger.info("Model wrapped.")
 
     # Evaluate model and log metrics to MLFlow experiment
@@ -76,23 +80,17 @@ with mlflow.start_run(
     logger.info("Model logged to MLFlow experiment.")
 
     # Register model to MLFlow
-    run_id, model_version = model.register_model(git_sha)
+    run_id = model.register_model(git_sha)
     logger.info("Model register to MLFlow.")
 
-    # Load registered model
-    loaded_model = model.load_custom_model()
+# Load custom model
+loaded_model = model.load_custom_model()
 
-    # Load dataset from registered model
-    dataset_source = model.load_dataset_from_model(run_id)
-    dataset_source.load()
-    logger.info("Dataset loaded from registered model.")
+# Load dataset from registered model
+dataset_source = model.load_dataset_from_model(run_id)
+dataset_source.load()
+logger.info("Dataset loaded from registered model.")
 
-     # Get model version by alias
-    model_version_by_alias = model.model_version_by_alias()
-    logger.info("Model version by alias loaded.")
-
-    # Get model version by tag
-    model_version_by_tag = model.model_version_by_tag(git_sha)
-    logger.info("Model version by tag loaded.")
-
-print("Hello")
+# Get model version by alias
+model_version_by_alias = model.get_model_version_by_alias()
+logger.info("Model version by alias loaded.")

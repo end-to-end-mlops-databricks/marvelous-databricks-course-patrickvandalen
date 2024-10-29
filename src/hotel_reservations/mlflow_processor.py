@@ -1,3 +1,4 @@
+import pandas as pd
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
@@ -10,7 +11,7 @@ import mlflow
 from mlflow import MlflowClient
 from mlflow.models import infer_signature
 from databricks import feature_engineering
-from hotel_reservations.utils import adjust_predictions
+from src.hotel_reservations.utils import adjust_predictions
 
 mlflow.set_tracking_uri("databricks")
 mlflow.set_registry_uri('databricks-uc') # It must be -uc for registering models to Unity Catalog
@@ -58,7 +59,7 @@ class MLFlowProcessor:
     def predict(self):
         self.y_pred = self.model.predict(self.X_test)
     
-    def model_wrapper(self):
+    def model_wrapper(self, X_test):
         
         class HousePriceModelWrapper(mlflow.pyfunc.PythonModel):
     
@@ -67,15 +68,15 @@ class MLFlowProcessor:
                 
             def predict(self, context, model_input):
                 if isinstance(model_input, pd.DataFrame):
-                    self.y_pred = self.model.predict(self.X_test)
-                    self.y_pred = {"Prediction": adjust_predictions(
-                        self.y_pred[0])}
-                    return self.y_pred
+                    predictions = self.model.predict(X_test)
+                    predictions = {"Prediction": adjust_predictions(
+                        predictions[0])}
+                    return predictions
                 else:
                     raise ValueError("Input must be a pandas DataFrame.")
         
         self.wrapped_model = HousePriceModelWrapper(self.model)
-        self.example_prediction = wrapped_model.predict(context=None, model_input=self.X_test.iloc[0:1])
+        self.example_prediction = self.wrapped_model.predict(context=None, model_input=X_test.iloc[0:1])
     
     def evaluate(self):
         mse = mean_squared_error(self.y_test, self.y_pred)
@@ -152,9 +153,9 @@ class MLFlowProcessor:
             tags={"git_sha": f"{git_sha}"})
         
         self.model_version_alias = "the_best_model"
-        client.set_registered_model_alias(self.model_name, self.model_version_alias, "1")         
+        client.set_registered_model_alias(self.model_name, self.model_version_alias, model_version.version)         
         
-        return run_id, model_version
+        return run_id
     
     def load_model(self):       
         loaded_model = mlflow.pyfunc.load_model(f"models:/{self.model_name}@{self.model_version_alias}")
@@ -180,7 +181,8 @@ class MLFlowProcessor:
         return model_version_by_alias
     
     def get_model_version_by_tag(self, git_sha):
-        model_version_by_tag = mlflow.search_model_versions(filter_string = "name='{self.model_name}' and tag.git_sha = '{git_sha}'")
+        filter_string = f"name='{self.model_name}' and tags.tag='{tag}'"
+        model_version_by_tag = client.search_model_versions(filter_string)
         
         return model_version_by_tag
     

@@ -12,8 +12,6 @@ class DataProcessor:
         self.config = config
         self.train_table_uc = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "train_set"
         self.test_table_uc = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "test_set"
-        self.total_table_uc = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "total_set"
-        self.fe_table_name = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "fe_table"
         self.fe_function_name = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "fe_function"
 
     def load_data(self, filepath):
@@ -42,45 +40,22 @@ class DataProcessor:
             "update_timestamp_utc", to_utc_timestamp(current_timestamp(), "UTC"))   
         
         test_set_with_timestamp = spark.createDataFrame(test_set).withColumn(
-            "update_timestamp_utc", to_utc_timestamp(current_timestamp(), "UTC"))
-        
-        total_set_with_timestamp = spark.createDataFrame(self.df).withColumn(
-            "update_timestamp_utc", to_utc_timestamp(current_timestamp(), "UTC"))
-        
+            "update_timestamp_utc", to_utc_timestamp(current_timestamp(), "UTC"))        
+       
         train_set_with_timestamp.write.mode("append").saveAsTable(self.train_table_uc)
         test_set_with_timestamp.write.mode("append").saveAsTable(self.test_table_uc)
-        total_set_with_timestamp.write.mode("append").saveAsTable(self.total_table_uc)
 
         spark.sql(f"ALTER TABLE {self.train_table_uc} "
           "SET TBLPROPERTIES (delta.enableChangeDataFeed = true);")
         
         spark.sql(f"ALTER TABLE {self.test_table_uc} "
           "SET TBLPROPERTIES (delta.enableChangeDataFeed = true);") 
-        
-        spark.sql(f"ALTER TABLE {self.total_table_uc} "
-          "SET TBLPROPERTIES (delta.enableChangeDataFeed = true);") 
 
         train_set_spark = spark.sql(f'select * from {self.train_table_uc}')
         test_set_spark = spark.sql(f'select * from {self.test_table_uc}')
 
-        return train_set_spark, test_set_spark
-    
-    def create_feature_table(self, spark: SparkSession):        
-        spark.sql(f"""
-        CREATE OR REPLACE TABLE {self.fe_table_name}
-        (Booking_ID STRING NOT NULL,
-        no_of_special_requests INT);
-        """)
-
-        spark.sql(f"ALTER TABLE {self.fe_table_name} "
-                "ADD CONSTRAINT hotel_pk PRIMARY KEY(Booking_ID);")
-
-        spark.sql(f"ALTER TABLE {self.fe_table_name} "
-                "SET TBLPROPERTIES (delta.enableChangeDataFeed = true);")
-
-        spark.sql(f"INSERT INTO {self.fe_table_name} "
-                f"SELECT Booking_ID, no_of_special_requests FROM {self.total_table_uc}")
-            
+        return train_set_spark, test_set_spark    
+           
     def create_feature_function(self, spark: SparkSession):        
         spark.sql(f"""
         CREATE OR REPLACE FUNCTION {self.fe_function_name}(NoWeekNights INT, NoWeekendNights INT)
@@ -92,7 +67,6 @@ class DataProcessor:
         """)
 
     def feature_engineering(self, train_set_spark, spark: SparkSession):
-        self.create_feature_table(spark=spark)
         self.create_feature_function(spark=spark)
 
         fe = feature_engineering.FeatureEngineeringClient()
@@ -101,11 +75,6 @@ class DataProcessor:
             df=train_set_spark.withColumn("no_of_week_nights", train_set_spark["no_of_week_nights"].cast("int")).withColumn("no_of_weekend_nights", train_set_spark["no_of_weekend_nights"].cast("int")),
             label=self.config["target"],
             feature_lookups=[
-                FeatureLookup(
-                    table_name=self.fe_table_name,
-                    feature_names=["no_of_special_requests"],
-                    lookup_key="Booking_ID",
-                ),
                 FeatureFunction(
                     udf_name=self.fe_function_name,
                     output_name="TotalNoNights",
