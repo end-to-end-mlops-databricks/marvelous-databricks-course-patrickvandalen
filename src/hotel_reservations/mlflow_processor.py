@@ -9,11 +9,13 @@ from sklearn.impute import SimpleImputer
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
 from hotel_reservations.utils import adjust_predictions
 
 mlflow.set_tracking_uri("databricks")
 mlflow.set_registry_uri("databricks-uc")  # It must be -uc for registering models to Unity Catalog
 client = MlflowClient()
+
 
 class MLFlowProcessor:
     def __init__(self, config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test):

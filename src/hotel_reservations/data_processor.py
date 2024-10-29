@@ -6,6 +6,7 @@ from pyspark.sql import functions as F
 from pyspark.sql.functions import current_timestamp, to_utc_timestamp
 from sklearn.model_selection import train_test_split
 
+
 class DataProcessor:
     def __init__(self, filepath, config):
         self.df = self.load_data(filepath)
@@ -55,7 +56,7 @@ class DataProcessor:
         test_set_spark = spark.sql(f"select * from {self.test_table_uc}")
 
         return train_set_spark, test_set_spark
-    
+
     def create_feature_table(self, spark: SparkSession):
         spark.sql(f"""
         CREATE OR REPLACE TABLE {self.fe_table_name}
@@ -63,14 +64,13 @@ class DataProcessor:
         type_of_meal_plan STRING);
         """)
 
-        spark.sql(f"ALTER TABLE {self.fe_table_name} "
-                "ADD CONSTRAINT hotel_reservations_pk PRIMARY KEY(Booking_ID);")
+        spark.sql(f"ALTER TABLE {self.fe_table_name} " "ADD CONSTRAINT hotel_reservations_pk PRIMARY KEY(Booking_ID);")
 
-        spark.sql(f"ALTER TABLE {self.fe_table_name} "
-                "SET TBLPROPERTIES (delta.enableChangeDataFeed = true);")
+        spark.sql(f"ALTER TABLE {self.fe_table_name} " "SET TBLPROPERTIES (delta.enableChangeDataFeed = true);")
 
-        spark.sql(f"INSERT INTO {self.fe_table_name} "
-                f"SELECT Booking_ID, type_of_meal_plan FROM {self.train_table_uc}")
+        spark.sql(
+            f"INSERT INTO {self.fe_table_name} " f"SELECT Booking_ID, type_of_meal_plan FROM {self.train_table_uc}"
+        )
 
     def create_feature_function(self, spark: SparkSession):
         spark.sql(f"""
@@ -89,9 +89,9 @@ class DataProcessor:
         fe = feature_engineering.FeatureEngineeringClient()
 
         training_set = fe.create_training_set(
-            df=train_set_spark.withColumn(
-                "no_of_week_nights", train_set_spark["no_of_week_nights"].cast("int")
-            ).withColumn("no_of_weekend_nights", train_set_spark["no_of_weekend_nights"].cast("int")).drop('type_of_meal_plan'),
+            df=train_set_spark.withColumn("no_of_week_nights", train_set_spark["no_of_week_nights"].cast("int"))
+            .withColumn("no_of_weekend_nights", train_set_spark["no_of_weekend_nights"].cast("int"))
+            .drop("type_of_meal_plan"),
             label=self.config["target"],
             feature_lookups=[
                 FeatureLookup(
@@ -103,7 +103,7 @@ class DataProcessor:
                     udf_name=self.fe_function_name,
                     output_name="TotalNoNights",
                     input_bindings={"NoWeekNights": "no_of_week_nights", "NoWeekendNights": "no_of_weekend_nights"},
-                )
+                ),
             ],
             exclude_columns=["update_timestamp_utc"],
         )
