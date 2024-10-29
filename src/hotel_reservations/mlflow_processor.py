@@ -137,7 +137,7 @@ class MLFlowProcessor:
         mlflow.pyfunc.log_model(
             python_model=self.wrapped_model,
             artifact_path="lightgbm-pipeline-model",
-            code_paths = ["../hotel_reservations-0.0.1-py3-none-any.whl"],
+            code_paths = ["../mlops_with_databricks-0.0.1-py3-none-any.whl"],
             signature=signature
         )
 
