@@ -63,21 +63,36 @@ with mlflow.start_run(
     model.train()
     logger.info("Model training and MLFlow experiment created.")
 
+    # Wrap custom model
+    model.wrap_model()
+    logger.info("Model wrapped.")
+
     # Evaluate model and log metrics to MLFlow experiment
     model.evaluate()
     logger.info("Model evaluated and logged in MLFlow experiment.")
 
     # Log model to MLFlow experiment
-    model.log_model()
+    model.log_model_custom()
     logger.info("Model logged to MLFlow experiment.")
 
     # Register model to MLFlow
     run_id, model_version = model.register_model(git_sha)
     logger.info("Model register to MLFlow.")
 
+    # Load registered model
+    loaded_model = model.load_custom_model()
+
     # Load dataset from registered model
     dataset_source = model.load_dataset_from_model(run_id)
     dataset_source.load()
     logger.info("Dataset loaded from registered model.")
+
+     # Get model version by alias
+    model_version_by_alias = model.model_version_by_alias()
+    logger.info("Model version by alias loaded.")
+
+    # Get model version by tag
+    model_version_by_tag = model.model_version_by_tag(git_sha)
+    logger.info("Model version by tag loaded.")
 
 print("Hello")

@@ -67,6 +67,10 @@ with mlflow.start_run(
     model.train()
     logger.info("Model training and MLFlow experiment created.")
 
+    # Create predictions
+    model.predict()
+    logger.info("Model predictions created.")
+
     # Evaluate model and log metrics to MLFlow experiment
     model.evaluate()
     logger.info("Model evaluated and logged in MLFlow experiment.")
@@ -79,9 +83,20 @@ with mlflow.start_run(
     run_id, model_version = model.register_model(git_sha)
     logger.info("Model register to MLFlow.")
 
+    # Load registered model
+    loaded_model = model.load_model()
+
     # Load dataset from registered model
     dataset_source = model.load_dataset_from_model(run_id)
     dataset_source.load()
     logger.info("Dataset loaded from registered model.")
+
+     # Get model version by alias
+    model_version_by_alias = model.model_version_by_alias()
+    logger.info("Model version by alias loaded.")
+
+    # Get model version by tag
+    model_version_by_tag = model.model_version_by_tag(git_sha)
+    logger.info("Model version by tag loaded.")
 
 print("Hello")
