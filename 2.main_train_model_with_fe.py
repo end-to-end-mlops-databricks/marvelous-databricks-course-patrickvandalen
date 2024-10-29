@@ -6,22 +6,16 @@ from pyspark.sql import SparkSession
 import subprocess
 import sys
 
-def install(package):
-    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+# for package in ["/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl", "databricks-feature-engineering"]:
+#     subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+# dbutils.library.restartPython()
 
-# package = "/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl"
-# install(package)
+from hotel_reservations.data_processor import DataProcessor
+from hotel_reservations.mlflow_processor import MLFlowProcessor
 
-package = "lightgbm"
-install(package)
-
-package = "databricks-feature-engineering"
-install(package)
-
-dbutils.library.restartPython() 
-
-from src.hotel_reservations.data_processor import DataProcessor
-from src.hotel_reservations.mlflow_processor import MLFlowProcessor
+spark = SparkSession.builder.getOrCreate()
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 
 # Load configuration
 with open("project_config.yml", "r") as file:
