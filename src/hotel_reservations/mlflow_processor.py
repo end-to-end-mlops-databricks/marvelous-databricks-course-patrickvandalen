@@ -1,23 +1,48 @@
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from lightgbm import LGBMRegressor
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import mlflow
 from mlflow.models import infer_signature
+from databricks import feature_engineering
 
 mlflow.set_tracking_uri("databricks")
 mlflow.set_registry_uri('databricks-uc') # It must be -uc for registering models to Unity Catalog
 
 class MLFlowProcessor:
-    def __init__(self, preprocessor, config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test):        
+    def __init__(self, config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test):        
         self.config = config
         self.train_set_spark = train_set_spark
         self.test_set_spark = test_set_spark
         self.X_train = X_train
         self.y_train = y_train
         self.X_test = X_test
-        self.y_test = y_test
+        self.y_test = y_test        
+
+    def preprocess_data(self):        
+        # Create preprocessing steps for numeric and categorical data
+        numeric_transformer = Pipeline(
+            steps=[("imputer", SimpleImputer(strategy="median")), ("scaler", StandardScaler())]
+        )
+
+        categorical_transformer = Pipeline(
+            steps=[
+                ("imputer", SimpleImputer(strategy="constant", fill_value="missing")),
+                ("onehot", OneHotEncoder(handle_unknown="ignore")),
+            ]
+        )
+
+        preprocessor = ColumnTransformer(
+            transformers=[
+                ("num", numeric_transformer, self.config["num_features"]),
+                ("cat", categorical_transformer, self.config["cat_features"]),
+            ]
+        )
+
         self.model = Pipeline(steps=[
             ('preprocessor', preprocessor),
             ('regressor', LGBMRegressor(**self.config["parameters"]))
@@ -59,6 +84,24 @@ class MLFlowProcessor:
             sk_model=self.model,
             artifact_path="lightgbm-pipeline-model",
             signature=signature
+        )
+
+    def log_model_fe(self, training_set):
+        signature = infer_signature(model_input=self.X_train, model_output=self.y_pred)
+
+        dataset = mlflow.data.from_spark(
+        self.train_set_spark, table_name=self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "train_set",
+        version="0")
+        mlflow.log_input(dataset, context="training")
+
+        fe = feature_engineering.FeatureEngineeringClient()
+        
+        fe.log_model(
+            model=self.model,
+            flavor=mlflow.sklearn,
+            artifact_path="lightgbm-pipeline-model",
+            training_set=training_set,
+            signature=signature,
         )
 
     def register_model(self, git_sha):
