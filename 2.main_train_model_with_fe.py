@@ -3,9 +3,9 @@ import yaml
 import json
 import mlflow
 from pyspark.sql import SparkSession
-import subprocess
-import sys
 
+# import subprocess
+# import sys
 # for package in ["/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl"]:
 #     subprocess.check_call([sys.executable, "-m", "pip", "install", package])
 # dbutils.library.restartPython()
