@@ -31,3 +31,10 @@ pre-commit run:
 uv pip install pre-commit
 uv run pre-commit run --all-files
 ```
+
+copy wheel:
+
+```
+databricks fs cp dist/mlops_with_databricks-0.0.1.tar.gz /Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl
+
+```
