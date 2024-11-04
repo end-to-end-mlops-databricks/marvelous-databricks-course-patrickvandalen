@@ -1,5 +1,8 @@
 import mlflow
+import time
+import requests
 import pandas as pd
+from pyspark.sql import SparkSession
 from databricks import feature_engineering
 from lightgbm import LGBMRegressor
 from mlflow import MlflowClient
@@ -214,3 +217,31 @@ class MLFlowProcessor:
                 ),
             ),
         )
+
+    def call_model_serving_endpoint(self, train_set, spark: SparkSession):
+
+        token = dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiToken().get()
+        host = spark.conf.get("spark.databricks.workspaceUrl")
+
+        required_columns = self.config["num_features"] + self.config["cat_features"]
+
+        sampled_records = train_set[required_columns].sample(n=1000, replace=True).to_dict(orient="records")
+        dataframe_records = [[record] for record in sampled_records]
+
+        start_time = time.time()
+
+        model_serving_endpoint = (
+            f"https://{host}/serving-endpoints/hotel-reservations-model-serving/invocations"
+        )
+        response = requests.post(
+            f"{model_serving_endpoint}",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"dataframe_records": dataframe_records[0]},
+        )
+
+        end_time = time.time()
+        execution_time = end_time - start_time
+
+        print("Response status:", response.status_code)
+        print("Reponse text:", response.text)
+        print("Execution time:", execution_time, "seconds")

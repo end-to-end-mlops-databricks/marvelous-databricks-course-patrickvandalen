@@ -91,9 +91,13 @@ logger.info("Dataset loaded from registered model.")
 model_version = model.get_model_version_by_alias()
 logger.info("Model version by alias loaded.")
 
-# # Create Serving Endpoint
+# # Create Model Serving Endpoint
 # model.create_model_serving_endpoint(model_name, model_version.version)
 # logger.info("Model serving endpoint created.")
+
+# Call Model Serving Endpoint
+model.call_model_serving_endpoint(train_set, spark=spark)
+logger.info("Model serving endpoint called.")
 
 
 
