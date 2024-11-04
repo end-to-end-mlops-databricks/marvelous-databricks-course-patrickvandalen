@@ -1,6 +1,7 @@
 import mlflow
 import time
 import requests
+import random
 import pandas as pd
 from pyspark.sql import SparkSession
 from databricks import feature_engineering
@@ -19,6 +20,11 @@ from databricks.sdk.service.serving import (
     TrafficConfig,
     Route
 )
+from databricks.sdk.service.catalog import (
+    OnlineTableSpec,
+    OnlineTableSpecTriggeredSchedulingPolicy,
+)
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from hotel_reservations.utils import adjust_predictions
 
@@ -195,10 +201,10 @@ class MLFlowProcessor:
 
         return model_version_by_tag
     
-    def create_model_serving_endpoint(self, model_name, model_version):
+    def create_model_serving_endpoint(self, model_name, model_serving_name, model_version):
 
         workspace.serving_endpoints.create(
-            name="hotel-reservations-model-serving",
+            name=model_serving_name,
             config=EndpointCoreConfigInput(
                 served_entities=[
                     ServedEntityInput(
@@ -208,28 +214,54 @@ class MLFlowProcessor:
                         entity_version=model_version,
                     )
                 ],
-            # Optional if only 1 entity is served
+            # Optional if only 1 entity is served (2 is version number)
             traffic_config=TrafficConfig(
                 routes=[
-                    Route(served_model_name="hotel-reservations-model-serving-2",
+                    Route(served_model_name=model_serving_name + "-2",
                         traffic_percentage=100)
                 ]
                 ),
             ),
         )
 
-    def call_model_serving_endpoint(self, train_set, token, host, spark: SparkSession):
+    def create_model_with_fe_serving_endpoint(self, model_name, model_serving_name, model_version):
+
+        # Create online table
+        online_table_name = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "fe_online"
+        spec = OnlineTableSpec(
+            primary_key_columns=["Id"],
+            source_table_full_name=self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "fe_table",
+            run_triggered=OnlineTableSpecTriggeredSchedulingPolicy.from_dict({"triggered": "true"}),
+            perform_full_copy=False,
+        )
+
+        online_table_pipeline = workspace.online_tables.create(name=online_table_name, spec=spec)
+
+        # Create endpoint
+        workspace.serving_endpoints.create(
+            name=model_serving_name,
+            config=EndpointCoreConfigInput(
+                served_entities=[
+                    ServedEntityInput(
+                        entity_name=model_name,
+                        scale_to_zero_enabled=True,
+                        workload_size="Small",
+                        entity_version=model_version,
+                    )
+                ]
+            )
+        )
+
+    def call_model_serving_endpoint(self, train_set, model_serving_name, token, host):
 
         required_columns = self.config["num_features"] + self.config["cat_features"]
-        print(required_columns)
-
         sampled_records = train_set[required_columns].sample(n=1000, replace=True).to_dict(orient="records")
         dataframe_records = [[record] for record in sampled_records]
 
         start_time = time.time()
 
         model_serving_endpoint = (
-            f"https://{host}/serving-endpoints/hotel-reservations-model-serving/invocations"
+            f"https://{host}/serving-endpoints/{model_serving_name}/invocations"
         )
         response = requests.post(
             f"{model_serving_endpoint}",
@@ -243,3 +275,46 @@ class MLFlowProcessor:
         print("Response status:", response.status_code)
         print("Reponse text:", response.text)
         print("Execution time:", execution_time, "seconds")
+
+    def model_serving_loadtest(self, train_set, model_serving_name, token, host, num_requests):
+
+        required_columns = self.config["num_features"] + self.config["cat_features"]
+        sampled_records = train_set[required_columns].sample(n=1000, replace=True).to_dict(orient="records")
+        dataframe_records = [[record] for record in sampled_records]
+
+        model_serving_endpoint = (
+            f"https://{host}/serving-endpoints/{model_serving_name}/invocations"
+        )
+
+        # Function to make a request and record latency
+        def send_request():
+            random_record = random.choice(dataframe_records)
+            start_time = time.time()
+            response = requests.post(
+                model_serving_endpoint,
+                headers={"Authorization": f"Bearer {token}"},
+                json={"dataframe_records": random_record},
+            )
+            end_time = time.time()
+            latency = end_time - start_time
+            return response.status_code, latency
+        
+        total_start_time = time.time()
+        latencies = []
+
+        # Send requests concurrently
+        with ThreadPoolExecutor(max_workers=100) as executor:
+            futures = [executor.submit(send_request) for _ in range(num_requests)]
+
+            for future in as_completed(futures):
+                status_code, latency = future.result()
+                latencies.append(latency)
+
+        total_end_time = time.time()
+        total_execution_time = total_end_time - total_start_time
+
+        # Calculate the average latency
+        average_latency = sum(latencies) / len(latencies)
+
+        print("\nTotal execution time:", total_execution_time, "seconds")
+        print("Average latency per request:", average_latency, "seconds")

@@ -23,6 +23,9 @@ with open("project_config.yml", "r") as file:
 print("Configuration loaded:")
 print(yaml.dump(config, default_flow_style=False))
 
+model_name = config["catalog_name"] + "." + config["schema_name"] + "." + "hotel_reservations_model_with_fe"
+model_serving_name = "hotel-reservations-model-with-fe-serving"
+
 # Initialize DataProcessor
 data_processor = DataProcessor("/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/hotel_reservations.csv", config)
 logger.info("DataProcessor initialized.")
@@ -97,3 +100,7 @@ logger.info("Dataset loaded from registered model.")
 # Get model version by alias
 model_version_by_alias = model.get_model_version_by_alias()
 logger.info("Model version by alias loaded.")
+
+# # Create Model with FE Serving Endpoint
+# model.create_model_with_fe_serving_endpoint(model_name, model_serving_name, model_version.version)
+# logger.info("Model with fe serving endpoint created.")

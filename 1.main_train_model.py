@@ -27,6 +27,7 @@ print("Configuration loaded:")
 print(yaml.dump(config, default_flow_style=False))
 
 model_name = config["catalog_name"] + "." + config["schema_name"] + "." + "hotel_reservations_model"
+model_serving_name = "hotel-reservations-model-serving"
 
 # Initialize DataProcessor
 data_processor = DataProcessor("/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/hotel_reservations.csv", config)
@@ -95,12 +96,17 @@ model_version = model.get_model_version_by_alias()
 logger.info("Model version by alias loaded.")
 
 # # Create Model Serving Endpoint
-# model.create_model_serving_endpoint(model_name, model_version.version)
+# model.create_model_serving_endpoint(model_name, model_serving_name, model_version.version)
 # logger.info("Model serving endpoint created.")
 
 # # Call Model Serving Endpoint
-# model.call_model_serving_endpoint(train_set, token, host, spark=spark)
+# model.call_model_serving_endpoint(train_set, model_serving_name, token, host)
 # logger.info("Model serving endpoint called.")
+
+# # Call Model Serving Loadtest
+# num_requests = 100
+# model.model_serving_endpoint(train_set, model_serving_name, token, host, num_requests)
+# logger.info("Model serving loadtest completed.")
 
 
 
