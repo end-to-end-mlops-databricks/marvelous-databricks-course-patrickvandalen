@@ -40,7 +40,8 @@ X_train, y_train, X_test, y_test = data_processor.get_X_y_datasets(train_set_spa
 logger.info("Data read from catalog.")
 
 # Initialize MLFlow Processor
-model = MLFlowProcessor(config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test)
+model_name = config["catalog_name"] + "." + config["schema_name"] + "." + "hotel_reservations_model_custom"
+model = MLFlowProcessor(config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test, model_name)
 logger.info("MLFlow Processor initialized.")
 
 # Create preprocessing steps and pipeline

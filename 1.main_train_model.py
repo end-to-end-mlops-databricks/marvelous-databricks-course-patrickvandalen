@@ -9,8 +9,8 @@ from pyspark.sql import SparkSession
 # for package in ["/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl"]:
 #     subprocess.check_call([sys.executable, "-m", "pip", "install", package])
 # dbutils.library.restartPython()
-from hotel_reservations.data_processor import DataProcessor
-from hotel_reservations.mlflow_processor import MLFlowProcessor
+from src.hotel_reservations.data_processor import DataProcessor
+from src.hotel_reservations.mlflow_processor import MLFlowProcessor
 
 spark = SparkSession.builder.getOrCreate()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -22,6 +22,8 @@ with open("project_config.yml", "r") as file:
 
 print("Configuration loaded:")
 print(yaml.dump(config, default_flow_style=False))
+
+model_name = config["catalog_name"] + "." + config["schema_name"] + "." + "hotel_reservations_model"
 
 # Initialize DataProcessor
 data_processor = DataProcessor("/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/hotel_reservations.csv", config)
@@ -40,7 +42,7 @@ X_train, y_train, X_test, y_test = data_processor.get_X_y_datasets(train_set_spa
 logger.info("Data read from catalog.")
 
 # Initialize MLFlow Processor
-model = MLFlowProcessor(config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test)
+model = MLFlowProcessor(config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test, model_name)
 logger.info("MLFlow Processor initialized.")
 
 # Create preprocessing steps and pipeline
@@ -86,5 +88,10 @@ dataset_source.load()
 logger.info("Dataset loaded from registered model.")
 
 # Get model version by alias
-model_version_by_alias = model.get_model_version_by_alias()
+model_version = model.get_model_version_by_alias()
 logger.info("Model version by alias loaded.")
+
+# Create Serving Endpoint
+model.create_model_serving_endpoint(model_name, model_version)
+logger.info("Model serving endpoint created.")
+

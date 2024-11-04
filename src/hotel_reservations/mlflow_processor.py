@@ -9,16 +9,23 @@ from sklearn.impute import SimpleImputer
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from databricks.sdk import WorkspaceClient
+from databricks.sdk.service.serving import (
+    EndpointCoreConfigInput,
+    ServedEntityInput,
+    TrafficConfig,
+    Route
+)
 
 from hotel_reservations.utils import adjust_predictions
 
 mlflow.set_tracking_uri("databricks")
 mlflow.set_registry_uri("databricks-uc")  # It must be -uc for registering models to Unity Catalog
 client = MlflowClient()
-
+workspace = WorkspaceClient()
 
 class MLFlowProcessor:
-    def __init__(self, config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test):
+    def __init__(self, config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test, model_name):
         self.config = config
         self.train_set_spark = train_set_spark
         self.test_set_spark = test_set_spark
@@ -26,9 +33,7 @@ class MLFlowProcessor:
         self.y_train = y_train
         self.X_test = X_test
         self.y_test = y_test
-        self.model_name = (
-            self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "house_prices_model_basic"
-        )
+        self.model_name = model_name
 
     def preprocess_data(self):
         # Create preprocessing steps for numeric and categorical data
@@ -186,3 +191,26 @@ class MLFlowProcessor:
         model_version_by_tag = client.search_model_versions(filter_string)
 
         return model_version_by_tag
+    
+    def create_model_serving_endpoint(self, model_name, model_version):
+
+        workspace.serving_endpoints.create(
+            name="hotel-reservations-model-serving",
+            config=EndpointCoreConfigInput(
+                served_entities=[
+                    ServedEntityInput(
+                        entity_name=model_name,
+                        scale_to_zero_enabled=True,
+                        workload_size="Small",
+                        entity_version=model_version,
+                    )
+                ],
+            # Optional if only 1 entity is served
+            traffic_config=TrafficConfig(
+                routes=[
+                    Route(served_model_name="hotel-reservations-model-serving-2",
+                        traffic_percentage=100)
+                ]
+                ),
+            ),
+        )
