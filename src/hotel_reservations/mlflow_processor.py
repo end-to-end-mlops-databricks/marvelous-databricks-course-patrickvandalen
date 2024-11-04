@@ -218,12 +218,10 @@ class MLFlowProcessor:
             ),
         )
 
-    def call_model_serving_endpoint(self, train_set, spark: SparkSession):
-
-        token = dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiToken().get()
-        host = spark.conf.get("spark.databricks.workspaceUrl")
+    def call_model_serving_endpoint(self, train_set, token, host, spark: SparkSession):
 
         required_columns = self.config["num_features"] + self.config["cat_features"]
+        print(required_columns)
 
         sampled_records = train_set[required_columns].sample(n=1000, replace=True).to_dict(orient="records")
         dataframe_records = [[record] for record in sampled_records]

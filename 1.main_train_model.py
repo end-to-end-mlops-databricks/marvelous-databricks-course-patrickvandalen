@@ -16,6 +16,9 @@ spark = SparkSession.builder.getOrCreate()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
+token = dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiToken().get()
+host = spark.conf.get("spark.databricks.workspaceUrl")
+
 # Load configuration
 with open("project_config.yml", "r") as file:
     config = yaml.safe_load(file)
@@ -95,9 +98,9 @@ logger.info("Model version by alias loaded.")
 # model.create_model_serving_endpoint(model_name, model_version.version)
 # logger.info("Model serving endpoint created.")
 
-# Call Model Serving Endpoint
-model.call_model_serving_endpoint(train_set, spark=spark)
-logger.info("Model serving endpoint called.")
+# # Call Model Serving Endpoint
+# model.call_model_serving_endpoint(train_set, token, host, spark=spark)
+# logger.info("Model serving endpoint called.")
 
 
 
