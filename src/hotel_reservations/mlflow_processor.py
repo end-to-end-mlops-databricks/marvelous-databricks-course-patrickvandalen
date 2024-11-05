@@ -3,6 +3,7 @@ import time
 import requests
 import random
 import pandas as pd
+import hashlib
 from pyspark.sql import SparkSession
 from databricks import feature_engineering
 from lightgbm import LGBMRegressor
@@ -44,7 +45,7 @@ class MLFlowProcessor:
         self.y_test = y_test
         self.model_name = model_name
 
-    def preprocess_data(self):
+    def preprocess_data(self, paramaters):
         # Create preprocessing steps for numeric and categorical data
         numeric_transformer = Pipeline(
             steps=[("imputer", SimpleImputer(strategy="median")), ("scaler", StandardScaler())]
@@ -65,7 +66,7 @@ class MLFlowProcessor:
         )
 
         self.model = Pipeline(
-            steps=[("preprocessor", preprocessor), ("regressor", LGBMRegressor(**self.config["parameters"]))]
+            steps=[("preprocessor", preprocessor), ("regressor", LGBMRegressor(**paramaters))]
         )
 
     def train(self):
@@ -81,7 +82,7 @@ class MLFlowProcessor:
 
             def predict(self, context, model_input):
                 if isinstance(model_input, pd.DataFrame):
-                    predictions = self.model.predict(X_test)
+                    predictions = self.model.predict(model_input)
                     predictions = {"Prediction": adjust_predictions(predictions[0])}
                     return predictions
                 else:
@@ -90,7 +91,31 @@ class MLFlowProcessor:
         self.wrapped_model = HousePriceModelWrapper(self.model)
         self.example_prediction = self.wrapped_model.predict(context=None, model_input=X_test.iloc[0:1])
 
-    def evaluate(self):
+    def model_wrapper_ab_test(self, models, X_test):        
+        class HousePriceModelWrapper(mlflow.pyfunc.PythonModel):
+            def __init__(self, model):
+                self.model = model
+                self.model_a = models[0]
+                self.model_b = models[1]
+               
+            def predict(self, context, model_input):
+                if isinstance(model_input, pd.DataFrame):
+                    house_id = str((model_input["Booking_ID"].values[0])[-3:]*1)
+                    hashed_id = hashlib.md5(house_id.encode(encoding="UTF-8")).hexdigest()
+                    # convert a hexadecimal (base-16) string into an integer
+                    if int(hashed_id, 16) % 2:
+                        predictions = self.model_a.predict(model_input)
+                        return {"Prediction": predictions[0], "model": "Model A"}
+                    else:
+                        predictions = self.model_b.predict(model_input)
+                        return {"Prediction": predictions[0], "model": "Model B"}
+                else:
+                    raise ValueError("Input must be a pandas DataFrame.")
+
+        self.wrapped_model = HousePriceModelWrapper(models)
+        self.example_prediction = self.wrapped_model.predict(context=None, model_input=X_test.iloc[0:1])
+
+    def evaluate(self, parameters):
         mse = mean_squared_error(self.y_test, self.y_pred)
         mae = mean_absolute_error(self.y_test, self.y_pred)
         r2 = r2_score(self.y_test, self.y_pred)
@@ -100,13 +125,12 @@ class MLFlowProcessor:
         print(f"R2 Score: {r2}")
 
         # Log parameters, metrics, and the model to MLflow
-        mlflow.log_param("model_type", "LightGBM with preprocessing")
-        mlflow.log_params(self.config["parameters"])
+        mlflow.log_params(parameters)
         mlflow.log_metric("mse", mse)
         mlflow.log_metric("mae", mae)
         mlflow.log_metric("r2_score", r2)
 
-    def log_model(self):
+    def log_model(self, artifact_path):
         signature = infer_signature(model_input=self.X_train, model_output=self.y_pred)
 
         dataset = mlflow.data.from_spark(
@@ -116,9 +140,9 @@ class MLFlowProcessor:
         )
         mlflow.log_input(dataset, context="training")
 
-        mlflow.sklearn.log_model(sk_model=self.model, artifact_path="lightgbm-pipeline-model", signature=signature)
+        mlflow.sklearn.log_model(sk_model=self.model, artifact_path=artifact_path, signature=signature)
 
-    def log_model_fe(self, training_set):
+    def log_model_fe(self, training_set, artifact_path):
         signature = infer_signature(model_input=self.X_train, model_output=self.y_pred)
 
         dataset = mlflow.data.from_spark(
@@ -133,12 +157,12 @@ class MLFlowProcessor:
         fe.log_model(
             model=self.model,
             flavor=mlflow.sklearn,
-            artifact_path="lightgbm-pipeline-model",
+            artifact_path=artifact_path,
             training_set=training_set,
             signature=signature,
         )
 
-    def log_model_custom(self):
+    def log_model_custom(self, artifact_path):
         signature = infer_signature(model_input=self.X_train, model_output={"Prediction": self.example_prediction})
 
         dataset = mlflow.data.from_spark(
@@ -150,35 +174,34 @@ class MLFlowProcessor:
 
         mlflow.pyfunc.log_model(
             python_model=self.wrapped_model,
-            artifact_path="lightgbm-pipeline-model",
+            artifact_path=artifact_path,
             code_paths=[
                 "/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl"
             ],
             signature=signature,
         )
 
-    def register_model(self, git_sha):
+    def register_model(self, git_sha, model_version_alias, artifact_path):
         run_id = mlflow.search_runs(
             experiment_names=[self.config["experiment_name"]],
             filter_string=f"tags.git_sha='{git_sha}'",
         ).run_id[0]
 
         model_version = mlflow.register_model(
-            model_uri=f"runs:/{run_id}/lightgbm-pipeline-model", name=self.model_name, tags={"git_sha": f"{git_sha}"}
+            model_uri=f"runs:/{run_id}/{artifact_path}", name=self.model_name, tags={"git_sha": f"{git_sha}"}
         )
 
-        self.model_version_alias = "the_best_model"
-        client.set_registered_model_alias(self.model_name, self.model_version_alias, model_version.version)
+        client.set_registered_model_alias(self.model_name, model_version_alias, model_version.version)
 
         return run_id
 
-    def load_model(self):
-        loaded_model = mlflow.pyfunc.load_model(f"models:/{self.model_name}@{self.model_version_alias}")
+    def load_model(self, model_version_alias):
+        loaded_model = mlflow.pyfunc.load_model(f"models:/{self.model_name}@{model_version_alias}")
 
         return loaded_model
 
-    def load_custom_model(self, run_id):
-        loaded_model = mlflow.pyfunc.load_model(f"runs:/{run_id}/lightgbm-pipeline-model")
+    def load_custom_model(self, run_id, artifact_path):
+        loaded_model = mlflow.pyfunc.load_model(f"runs:/{run_id}/{artifact_path}")
         loaded_model.unwrap_python_model()
 
         return loaded_model
@@ -190,8 +213,8 @@ class MLFlowProcessor:
 
         return dataset_source
 
-    def get_model_version_by_alias(self):
-        model_version_by_alias = client.get_model_version_by_alias(self.model_name, self.model_version_alias)
+    def get_model_version_by_alias(self, model_version_alias):
+        model_version_by_alias = client.get_model_version_by_alias(self.model_name, model_version_alias)
 
         return model_version_by_alias
 

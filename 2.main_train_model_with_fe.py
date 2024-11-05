@@ -56,12 +56,14 @@ model = MLFlowProcessor(config, train_set_spark, test_set_spark, X_train, y_trai
 logger.info("MLFlow Processor initialized.")
 
 # Create preprocessing steps and pipeline
-model.preprocess_data()
+model.preprocess_data(config["parameters"])
 logger.info("Pipeline created")
 
 # Start an MLflow run to track the training process
 mlflow.set_experiment(experiment_name=config["experiment_name"])
 mlflow.set_experiment_tags({"repository_name": config["repository_name"]})
+artifact_path = "lightgbm-pipeline-model"
+model_version_alias = "the_best_model"
 git_sha = "ffa63b430205ff7"
 
 with mlflow.start_run(
@@ -78,19 +80,19 @@ with mlflow.start_run(
     logger.info("Model predictions created.")
 
     # Evaluate model and log metrics to MLFlow experiment
-    model.evaluate()
+    model.evaluate(config["parameters"])
     logger.info("Model evaluated and logged in MLFlow experiment.")
 
     # Log model with feature engineering to MLFlow experiment
-    model.log_model_fe(training_set)
+    model.log_model_fe(training_set, artifact_path)
     logger.info("Model logged to MLFlow experiment.")
 
     # Register model to MLFlow
-    run_id = model.register_model(git_sha)
+    run_id = model.register_model(git_sha, model_version_alias, artifact_path)
     logger.info("Model register to MLFlow.")
 
 # Load registered model
-loaded_model = model.load_model()
+loaded_model = model.load_model(model_version_alias)
 
 # Load dataset from registered model
 dataset_source = model.load_dataset_from_model(run_id)
@@ -98,7 +100,7 @@ dataset_source.load()
 logger.info("Dataset loaded from registered model.")
 
 # Get model version by alias
-model_version = model.get_model_version_by_alias()
+model_version = model.get_model_version_by_alias(model_version_alias)
 logger.info("Model version by alias loaded.")
 
 # Create Online Table for Feature Table (required for model serving endpoint)
