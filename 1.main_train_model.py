@@ -9,8 +9,8 @@ from pyspark.sql import SparkSession
 # for package in ["/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl"]:
 #     subprocess.check_call([sys.executable, "-m", "pip", "install", package])
 # dbutils.library.restartPython()
-from src.hotel_reservations.data_processor import DataProcessor
-from src.hotel_reservations.mlflow_processor import MLFlowProcessor
+from hotel_reservations.data_processor import DataProcessor
+from hotel_reservations.mlflow_processor import MLFlowProcessor
 
 spark = SparkSession.builder.getOrCreate()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -95,18 +95,18 @@ logger.info("Dataset loaded from registered model.")
 model_version = model.get_model_version_by_alias()
 logger.info("Model version by alias loaded.")
 
-# # Create Model Serving Endpoint
-# model.create_model_serving_endpoint(model_name, model_serving_name, model_version.version)
-# logger.info("Model serving endpoint created.")
+# Create Model Serving Endpoint
+model.create_model_serving_endpoint(model_name, model_serving_name, model_version.version)
+logger.info("Model serving endpoint created.")
 
-# # Call Model Serving Endpoint
-# model.call_model_serving_endpoint(train_set, model_serving_name, token, host)
-# logger.info("Model serving endpoint called.")
+# Call Model Serving Endpoint
+model.call_model_serving_endpoint(train_set, model_serving_name, token, host)
+logger.info("Model serving endpoint called.")
 
-# # Call Model Serving Loadtest
-# num_requests = 100
-# model.model_serving_endpoint(train_set, model_serving_name, token, host, num_requests)
-# logger.info("Model serving loadtest completed.")
+# Call Model Serving Loadtest
+num_requests = 100
+model.model_serving_endpoint(train_set, model_serving_name, token, host, num_requests)
+logger.info("Model serving loadtest completed.")
 
 
 

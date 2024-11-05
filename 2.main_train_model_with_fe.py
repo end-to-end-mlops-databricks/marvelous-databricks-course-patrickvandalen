@@ -98,9 +98,13 @@ dataset_source.load()
 logger.info("Dataset loaded from registered model.")
 
 # Get model version by alias
-model_version_by_alias = model.get_model_version_by_alias()
+model_version = model.get_model_version_by_alias()
 logger.info("Model version by alias loaded.")
 
-# # Create Model with FE Serving Endpoint
-# model.create_model_with_fe_serving_endpoint(model_name, model_serving_name, model_version.version)
-# logger.info("Model with fe serving endpoint created.")
+# Create Online Table for Feature Table (required for model serving endpoint)
+model.create_online_table()
+logger.info("Online Table created.")
+
+# Create Model Serving Endpoint
+model.create_model_serving_endpoint(model_name, model_serving_name, model_version.version)
+logger.info("Model serving endpoint created.")

@@ -22,7 +22,7 @@ from databricks.sdk.service.serving import (
 )
 from databricks.sdk.service.catalog import (
     OnlineTableSpec,
-    OnlineTableSpecTriggeredSchedulingPolicy,
+    OnlineTableSpecTriggeredSchedulingPolicy
 )
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -201,6 +201,18 @@ class MLFlowProcessor:
 
         return model_version_by_tag
     
+    def create_online_table(self):
+
+        online_table_name = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "fe_online"
+        spec = OnlineTableSpec(
+            primary_key_columns=["Id"],
+            source_table_full_name=self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "fe_table",
+            run_triggered=OnlineTableSpecTriggeredSchedulingPolicy.from_dict({"triggered": "true"}),
+            perform_full_copy=False,
+        )
+
+        online_table_pipeline = workspace.online_tables.create(name=online_table_name, spec=spec)
+    
     def create_model_serving_endpoint(self, model_name, model_serving_name, model_version):
 
         workspace.serving_endpoints.create(
@@ -222,34 +234,6 @@ class MLFlowProcessor:
                 ]
                 ),
             ),
-        )
-
-    def create_model_with_fe_serving_endpoint(self, model_name, model_serving_name, model_version):
-
-        # Create online table
-        online_table_name = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "fe_online"
-        spec = OnlineTableSpec(
-            primary_key_columns=["Id"],
-            source_table_full_name=self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "fe_table",
-            run_triggered=OnlineTableSpecTriggeredSchedulingPolicy.from_dict({"triggered": "true"}),
-            perform_full_copy=False,
-        )
-
-        online_table_pipeline = workspace.online_tables.create(name=online_table_name, spec=spec)
-
-        # Create endpoint
-        workspace.serving_endpoints.create(
-            name=model_serving_name,
-            config=EndpointCoreConfigInput(
-                served_entities=[
-                    ServedEntityInput(
-                        entity_name=model_name,
-                        scale_to_zero_enabled=True,
-                        workload_size="Small",
-                        entity_version=model_version,
-                    )
-                ]
-            )
         )
 
     def call_model_serving_endpoint(self, train_set, model_serving_name, token, host):
