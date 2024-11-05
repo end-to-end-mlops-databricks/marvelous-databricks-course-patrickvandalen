@@ -12,12 +12,12 @@ parameters:
 
 ab_test_experiment_name: "/Shared/Hotel_Reservations_AB_Testing"
 
-ab_test_paramaters_a:
+ab_test_parameters_a:
   learning_rate_a: 0.02
   max_depth_a: 6
   n_estimators: 1000
 
-ab_test_paramaters_b:
+ab_test_parameters_b:
   learning_rate_b: 0.02
   max_depth_b: 10
   n_estimators: 1000

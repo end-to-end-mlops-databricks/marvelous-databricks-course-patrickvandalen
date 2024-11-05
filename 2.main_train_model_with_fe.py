@@ -16,6 +16,9 @@ spark = SparkSession.builder.getOrCreate()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
+token = dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiToken().get()
+host = spark.conf.get("spark.databricks.workspaceUrl")
+
 # Load configuration
 with open("project_config.yml", "r") as file:
     config = yaml.safe_load(file)
@@ -60,11 +63,12 @@ model.preprocess_data(config["parameters"])
 logger.info("Pipeline created")
 
 # Start an MLflow run to track the training process
-mlflow.set_experiment(experiment_name=config["experiment_name"])
-mlflow.set_experiment_tags({"repository_name": config["repository_name"]})
+experiment_name = config["experiment_name"]
 artifact_path = "lightgbm-pipeline-model"
 model_version_alias = "the_best_model"
 git_sha = "ffa63b430205ff7"
+mlflow.set_experiment(experiment_name=experiment_name)
+mlflow.set_experiment_tags({"repository_name": config["repository_name"]})
 
 with mlflow.start_run(
     tags={"git_sha": f"{git_sha}", "branch": config["branch"]},
@@ -88,7 +92,7 @@ with mlflow.start_run(
     logger.info("Model logged to MLFlow experiment.")
 
     # Register model to MLFlow
-    run_id = model.register_model(git_sha, model_version_alias, artifact_path)
+    run_id = model.register_model(git_sha, model_version_alias, artifact_path, experiment_name)
     logger.info("Model register to MLFlow.")
 
 # Load registered model
@@ -110,3 +114,7 @@ logger.info("Online Table created.")
 # Create Model Serving Endpoint
 model.create_model_serving_endpoint(model_name, model_serving_name, model_version.version)
 logger.info("Model serving endpoint created.")
+
+# Call Model Serving Endpoint
+model.call_model_serving_endpoint(train_set, model_serving_name, token, host)
+logger.info("Model serving endpoint called.")

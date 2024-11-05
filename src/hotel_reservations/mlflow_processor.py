@@ -21,10 +21,10 @@ from databricks.sdk.service.serving import (
     TrafficConfig,
     Route
 )
-from databricks.sdk.service.catalog import (
-    OnlineTableSpec,
-    OnlineTableSpecTriggeredSchedulingPolicy
-)
+# from databricks.sdk.service.catalog import (
+#     OnlineTableSpec,
+#     OnlineTableSpecTriggeredSchedulingPolicy
+# )
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from hotel_reservations.utils import adjust_predictions
@@ -45,7 +45,7 @@ class MLFlowProcessor:
         self.y_test = y_test
         self.model_name = model_name
 
-    def preprocess_data(self, paramaters):
+    def preprocess_data(self, parameters):
         # Create preprocessing steps for numeric and categorical data
         numeric_transformer = Pipeline(
             steps=[("imputer", SimpleImputer(strategy="median")), ("scaler", StandardScaler())]
@@ -66,7 +66,7 @@ class MLFlowProcessor:
         )
 
         self.model = Pipeline(
-            steps=[("preprocessor", preprocessor), ("regressor", LGBMRegressor(**paramaters))]
+            steps=[("preprocessor", preprocessor), ("regressor", LGBMRegressor(**parameters))]
         )
 
     def train(self):
@@ -88,8 +88,10 @@ class MLFlowProcessor:
                 else:
                     raise ValueError("Input must be a pandas DataFrame.")
 
-        self.wrapped_model = HousePriceModelWrapper(self.model)
-        self.example_prediction = self.wrapped_model.predict(context=None, model_input=X_test.iloc[0:1])
+        wrapped_model = HousePriceModelWrapper(self.model)
+        example_prediction = wrapped_model.predict(context=None, model_input=X_test.iloc[0:1])
+
+        return wrapped_model, example_prediction
 
     def model_wrapper_ab_test(self, models, X_test):        
         class HousePriceModelWrapper(mlflow.pyfunc.PythonModel):
@@ -100,7 +102,7 @@ class MLFlowProcessor:
                
             def predict(self, context, model_input):
                 if isinstance(model_input, pd.DataFrame):
-                    house_id = str((model_input["Booking_ID"].values[0])[-3:]*1)
+                    house_id = str(model_input["Booking_ID"].str[-5:].values[0])
                     hashed_id = hashlib.md5(house_id.encode(encoding="UTF-8")).hexdigest()
                     # convert a hexadecimal (base-16) string into an integer
                     if int(hashed_id, 16) % 2:
@@ -112,8 +114,10 @@ class MLFlowProcessor:
                 else:
                     raise ValueError("Input must be a pandas DataFrame.")
 
-        self.wrapped_model = HousePriceModelWrapper(models)
-        self.example_prediction = self.wrapped_model.predict(context=None, model_input=X_test.iloc[0:1])
+        wrapped_model = HousePriceModelWrapper(models)
+        example_prediction = wrapped_model.predict(context=None, model_input=X_test.iloc[0:1])
+
+        return wrapped_model, example_prediction
 
     def evaluate(self, parameters):
         mse = mean_squared_error(self.y_test, self.y_pred)
@@ -162,8 +166,8 @@ class MLFlowProcessor:
             signature=signature,
         )
 
-    def log_model_custom(self, artifact_path):
-        signature = infer_signature(model_input=self.X_train, model_output={"Prediction": self.example_prediction})
+    def log_model_custom(self, artifact_path, wrapped_model, example_prediction):
+        signature = infer_signature(model_input=self.X_train, model_output={"Prediction": example_prediction})
 
         dataset = mlflow.data.from_spark(
             self.train_set_spark,
@@ -173,7 +177,7 @@ class MLFlowProcessor:
         mlflow.log_input(dataset, context="training")
 
         mlflow.pyfunc.log_model(
-            python_model=self.wrapped_model,
+            python_model=wrapped_model,
             artifact_path=artifact_path,
             code_paths=[
                 "/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl"
@@ -181,9 +185,9 @@ class MLFlowProcessor:
             signature=signature,
         )
 
-    def register_model(self, git_sha, model_version_alias, artifact_path):
+    def register_model(self, git_sha, model_version_alias, artifact_path, experiment_name):
         run_id = mlflow.search_runs(
-            experiment_names=[self.config["experiment_name"]],
+            experiment_names=[experiment_name],
             filter_string=f"tags.git_sha='{git_sha}'",
         ).run_id[0]
 
@@ -219,7 +223,7 @@ class MLFlowProcessor:
         return model_version_by_alias
 
     def get_model_version_by_tag(self, git_sha):
-        filter_string = f"name='{self.model_name}' and tags.tag='{git_sha}'"
+        filter_string = f"name='{self.model_name}' and tags.git_sha='{git_sha}'"
         model_version_by_tag = client.search_model_versions(filter_string)
 
         return model_version_by_tag

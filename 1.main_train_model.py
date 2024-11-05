@@ -54,11 +54,12 @@ model.preprocess_data(config["parameters"])
 logger.info("Pipeline created")
 
 # Start an MLflow run to track the training process
-mlflow.set_experiment(experiment_name=config["experiment_name"])
-mlflow.set_experiment_tags({"repository_name": config["repository_name"]})
+experiment_name = config["experiment_name"]
 artifact_path = "lightgbm-pipeline-model"
 model_version_alias = "the_best_model"
 git_sha = "ffa63b430205ff7"
+mlflow.set_experiment(experiment_name=experiment_name)
+mlflow.set_experiment_tags({"repository_name": config["repository_name"]})
 
 with mlflow.start_run(
     tags={"git_sha": f"{git_sha}", "branch": config["branch"]},
@@ -82,7 +83,7 @@ with mlflow.start_run(
     logger.info("Model logged to MLFlow experiment.")
 
     # Register model to MLFlow
-    run_id = model.register_model(git_sha, model_version_alias, artifact_path)
+    run_id = model.register_model(git_sha, model_version_alias, artifact_path, experiment_name)
     logger.info("Model register to MLFlow.")
 
 # Load registered model

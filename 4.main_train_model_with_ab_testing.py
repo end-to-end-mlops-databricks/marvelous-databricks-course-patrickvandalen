@@ -9,8 +9,8 @@ from pyspark.sql import SparkSession
 # for package in ["/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl"]:
 #     subprocess.check_call([sys.executable, "-m", "pip", "install", package])
 # dbutils.library.restartPython()
-from src.hotel_reservations.data_processor import DataProcessor
-from src.hotel_reservations.mlflow_processor import MLFlowProcessor
+from hotel_reservations.data_processor import DataProcessor
+from hotel_reservations.mlflow_processor import MLFlowProcessor
 
 spark = SparkSession.builder.getOrCreate()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -49,57 +49,67 @@ logger.info("Data read from catalog.")
 model = MLFlowProcessor(config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test, model_name)
 logger.info("MLFlow Processor initialized.")
 
-for ab_test_models in ["ab_test_parameters_a", "ab_test_parameters_b"]:
+for ab_test_models in ["model_A", "model_B"]:
+
+    if ab_test_models == 'model_A':
+        parameters = config["ab_test_parameters_a"]    
+    elif ab_test_models == 'model_B':
+        parameters = config["ab_test_parameters_b"]
 
     # Create preprocessing steps and pipeline
-    model.preprocess_data(config[ab_test_models])
-    logger.info("Pipeline created")
+    model.preprocess_data(parameters)
+    logger.info("Pipeline created") 
 
     # Start an MLflow run to track the training process
-    mlflow.set_experiment(experiment_name=config["ab_test_experiment_name"])
-    mlflow.set_experiment_tags({"repository_name": config["repository_name"]})
+    experiment_name = config["ab_test_experiment_name"]
     artifact_path = "lightgbm-pipeline-model"
-    model_version_alias = "model_" + ab_test_models
+    model_version_alias = ab_test_models
     git_sha = "ffa63b430205ff7"
+    mlflow.set_experiment(experiment_name=experiment_name)
+    mlflow.set_experiment_tags({"repository_name": config["repository_name"]})
 
-    with mlflow.start_run(
+    mlflow.start_run(
         tags={"model_class": ab_test_models, "git_sha": f"{git_sha}", "branch": config["branch"]},
-    ) as run:
-        run_id = run.info.run_id
+    )
 
-        # Train model and create MLFlow experiment
-        model.train()
-        logger.info("Model training and MLFlow experiment created.")
+    run = mlflow.active_run()
+    run_id = run.info.run_id
 
-        # Create predictions
-        model.predict()
-        logger.info("Model predictions created.")
+    # Train model and create MLFlow experiment
+    model.train()
+    logger.info("Model training and MLFlow experiment created.")
 
-        # Evaluate model and log metrics to MLFlow experiment
-        model.evaluate(config[ab_test_models])
-        logger.info("Model evaluated and logged in MLFlow experiment.")
+    # Create predictions
+    model.predict()
+    logger.info("Model predictions created.")
 
-        # Log model to MLFlow experiment
-        model.log_model(artifact_path)
-        logger.info("Model logged to MLFlow experiment.")
+    # Evaluate model and log metrics to MLFlow experiment
+    model.evaluate(parameters)
+    logger.info("Model evaluated and logged in MLFlow experiment.")
 
-        # Register model to MLFlow
-        run_id = model.register_model(git_sha, model_version_alias, artifact_path)
-        logger.info("Model register to MLFlow.")
+    # Log model to MLFlow experiment
+    model.log_model(artifact_path)
+    logger.info("Model logged to MLFlow experiment.")
+
+    # Register model to MLFlow
+    run_id = model.register_model(git_sha, model_version_alias, artifact_path, experiment_name)
+    logger.info("Model register to MLFlow.")
+
+    mlflow.end_run()
 
 # Load registered model A
-model_version_alias = "model_ab_test_parameters_a"
+model_version_alias = "model_A"
 model_A = model.load_model(model_version_alias)
-logger.info("Registered Model A.")
+logger.info("Loaded Model A.")
 
 # Load registered model B
-model_version_alias = "model_ab_test_parameters_b"
+model_version_alias = "model_B"
 model_B = model.load_model(model_version_alias)
-logger.info("Registered Model B.")
+logger.info("Loaded Model B.")
 
 # Wrap models A and B using hash for split
-models = [model_A, model_B, X_test]
-model.model_wrapper_ab_test(models)
+models = [model_A, model_B]
+wrapped_model, example_prediction = model.model_wrapper_ab_test(models, X_test)
 
 # Initialize MLFlow Processor
 model_name = config["catalog_name"] + "." + config["schema_name"] + "." + "hotel_reservations_model_ab_testing_wrapped"
@@ -107,21 +117,24 @@ model = MLFlowProcessor(config, train_set_spark, test_set_spark, X_train, y_trai
 logger.info("MLFlow Processor initialized.")
 
 # Start an MLflow run to log and register the wrapped model
-mlflow.set_experiment(experiment_name=config["ab_test_experiment_name"])
-mlflow.set_experiment_tags({"repository_name": config["repository_name"]})
+experiment_name = config["ab_test_experiment_name"]
 artifact_path = "pyfunc-house-price-model-ab"
 model_version_alias = "wrapped_model"
 git_sha = "ffa63b430205ff7"
+mlflow.set_experiment(experiment_name=experiment_name)
+mlflow.set_experiment_tags({"repository_name": config["repository_name"]})
 
-with mlflow.start_run() as run:
+with mlflow.start_run(
+    tags={"git_sha": f"{git_sha}", "branch": config["branch"]},
+) as run:
     run_id = run.info.run_id
 
     # Log model to MLFlow experiment
-    model.log_model_custom()
+    model.log_model_custom(artifact_path, wrapped_model, example_prediction)
     logger.info("Model logged to MLFlow experiment.")
 
      # Register model to MLFlow
-    run_id = model.register_model(git_sha, model_version_alias)
+    run_id = model.register_model(git_sha, model_version_alias, artifact_path, experiment_name)
     logger.info("Model register to MLFlow.")
 
 # Load dataset from registered model
