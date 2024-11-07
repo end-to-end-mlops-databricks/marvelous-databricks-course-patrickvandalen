@@ -9,6 +9,7 @@ from pyspark.sql import SparkSession
 # for package in ["/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl"]:
 #     subprocess.check_call([sys.executable, "-m", "pip", "install", package])
 # dbutils.library.restartPython()
+
 from hotel_reservations.data_processor import DataProcessor
 from hotel_reservations.mlflow_processor import MLFlowProcessor
 
@@ -27,7 +28,7 @@ print("Configuration loaded:")
 print(yaml.dump(config, default_flow_style=False))
 
 # Initialize DataProcessor
-data_processor = DataProcessor("/Volumes/" + config["catalog_name"] + "/" + config["schema_name"] + "/mlops_course/hotel_reservations.csv", config)
+data_processor = DataProcessor("/Volumes/" + config["catalog_name"] + "/" + config["schema_name"] + "/" + config["volume_name"] + "/" + config["table_name"], config)
 logger.info("DataProcessor initialized.")
 
 # Split into Train and Test data
@@ -43,7 +44,14 @@ X_train, y_train, X_test, y_test = data_processor.get_X_y_datasets(train_set_spa
 logger.info("Data read from catalog.")
 
 # Initialize MLFlow Processor
-model_name = config["catalog_name"] + "." + config["schema_name"] + "." + "hotel_reservations_model_custom"
+model_name = "hotel_reservations_model_custom"
+experiment_name = config["experiment_name"]
+artifact_path = "lightgbm-pipeline-model"
+model_version_alias = "the_best_model"
+git_sha = "ffa63b430205ff7"
+mlflow.set_experiment(experiment_name=experiment_name)
+mlflow.set_experiment_tags({"repository_name": config["repository_name"]})
+
 model = MLFlowProcessor(config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test, model_name, host, token)
 logger.info("MLFlow Processor initialized.")
 
@@ -52,13 +60,6 @@ model.preprocess_data(config["parameters"])
 logger.info("Pipeline created")
 
 # Start an MLflow run to track the training process
-experiment_name = config["experiment_name"]
-artifact_path = "lightgbm-pipeline-model"
-model_version_alias = "the_best_model"
-git_sha = "ffa63b430205ff7"
-mlflow.set_experiment(experiment_name=experiment_name)
-mlflow.set_experiment_tags({"repository_name": config["repository_name"]})
-
 with mlflow.start_run(
     tags={"git_sha": f"{git_sha}", "branch": config["branch"]},
 ) as run:

@@ -1,5 +1,7 @@
 catalog_name: main
-schema_name: patrick_mlops
+schema_name: patrick_mlops_new
+volume_name: mlops_course
+table_name: hotel_reservations.csv
 
 repository_name: "Patrick_MLOps"
 experiment_name: "/Shared/Hotel_Reservations"

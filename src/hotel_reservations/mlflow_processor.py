@@ -9,29 +9,25 @@ from databricks import feature_engineering
 from lightgbm import LGBMRegressor
 from mlflow import MlflowClient
 from mlflow.models import infer_signature
+from mlflow.deployments import get_deploy_client
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from databricks.sdk import WorkspaceClient
-# from databricks.sdk.service.serving import (
-#     EndpointCoreConfigInput,
-#     ServedEntityInput,
-#     TrafficConfig,
-#     Route
-# )
-# from databricks.sdk.service.catalog import (
-#     OnlineTableSpec,
-#     OnlineTableSpecTriggeredSchedulingPolicy
-# )
+from databricks.sdk.service.catalog import (
+    OnlineTableSpec,
+    OnlineTableSpecTriggeredSchedulingPolicy
+)
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from src.hotel_reservations.utils import adjust_predictions
+from hotel_reservations.utils import adjust_predictions
 
 mlflow.set_tracking_uri("databricks")
 mlflow.set_registry_uri("databricks-uc")  # It must be -uc for registering models to Unity Catalog
-client = MlflowClient()
+deploy_client = get_deploy_client("databricks")
+mlflow_client = MlflowClient()
 
 class MLFlowProcessor:
     def __init__(self, config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test, model_name, host, token):
@@ -43,6 +39,7 @@ class MLFlowProcessor:
         self.X_test = X_test
         self.y_test = y_test
         self.model_name = model_name
+        self.full_model_path = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + self.model_name
         self.host = host
         self.token = token
 
@@ -198,15 +195,15 @@ class MLFlowProcessor:
         ).run_id[0]
 
         model_version = mlflow.register_model(
-            model_uri=f"runs:/{run_id}/{artifact_path}", name=self.model_name, tags={"git_sha": f"{git_sha}"}
+            model_uri=f"runs:/{run_id}/{artifact_path}", name=self.full_model_path, tags={"git_sha": f"{git_sha}"}
         )
 
-        client.set_registered_model_alias(self.model_name, model_version_alias, model_version.version)
+        mlflow_client.set_registered_model_alias(self.full_model_path, model_version_alias, model_version.version)
 
         return run_id
 
     def load_model(self, model_version_alias):
-        loaded_model = mlflow.pyfunc.load_model(f"models:/{self.model_name}@{model_version_alias}")
+        loaded_model = mlflow.pyfunc.load_model(f"models:/{self.full_model_path}@{model_version_alias}")
 
         return loaded_model
 
@@ -224,13 +221,13 @@ class MLFlowProcessor:
         return dataset_source
 
     def get_model_version_by_alias(self, model_version_alias):
-        model_version_by_alias = client.get_model_version_by_alias(self.model_name, model_version_alias)
+        model_version_by_alias = mlflow_client.get_model_version_by_alias(self.full_model_path, model_version_alias)
 
         return model_version_by_alias
 
     def get_model_version_by_tag(self, git_sha):
-        filter_string = f"name='{self.model_name}' and tags.git_sha='{git_sha}'"
-        model_version_by_tag = client.search_model_versions(filter_string)
+        filter_string = f"name='{self.full_model_path}' and tags.git_sha='{git_sha}'"
+        model_version_by_tag = mlflow_client.search_model_versions(filter_string)
 
         return model_version_by_tag
     
@@ -238,7 +235,7 @@ class MLFlowProcessor:
 
     #     online_table_name = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "fe_online"
     #     spec = OnlineTableSpec(
-    #         primary_key_columns=["Id"],
+    #         primary_key_columns=["Booking_ID"],
     #         source_table_full_name=self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "fe_table",
     #         run_triggered=OnlineTableSpecTriggeredSchedulingPolicy.from_dict({"triggered": "true"}),
     #         perform_full_copy=False,
@@ -246,28 +243,29 @@ class MLFlowProcessor:
 
     #     online_table_pipeline = workspace.online_tables.create(name=online_table_name, spec=spec)
     
-    # def create_model_serving_endpoint(self, model_name, model_serving_name, model_version):
+    def create_model_serving_endpoint(self, model_serving_name, model_version):
 
-    #     workspace.serving_endpoints.create(
-    #         name=model_serving_name,
-    #         config=EndpointCoreConfigInput(
-    #             served_entities=[
-    #                 ServedEntityInput(
-    #                     entity_name=model_name,
-    #                     scale_to_zero_enabled=True,
-    #                     workload_size="Small",
-    #                     entity_version=model_version,
-    #                 )
-    #             ],
-    #         # Optional if only 1 entity is served (2 is version number)
-    #         traffic_config=TrafficConfig(
-    #             routes=[
-    #                 Route(served_model_name=model_serving_name + "-2",
-    #                     traffic_percentage=100)
-    #             ]
-    #             ),
-    #         ),
-    #     )
+        endpoint = deploy_client.create_endpoint(
+            name=model_serving_name,
+            config={
+                "served_entities": [
+                    {
+                        "entity_name": self.full_model_path,
+                        "entity_version": "1",
+                        "workload_size": "Small",
+                        "scale_to_zero_enabled": True
+                    }
+                ],
+                "traffic_config": {
+                    "routes": [
+                        {
+                            "served_model_name": f"{self.model_name}-1",
+                            "traffic_percentage": 100
+                        }
+                    ]
+                }
+            }
+        )
 
     def call_model_serving_endpoint(self, train_set, model_serving_name):
 

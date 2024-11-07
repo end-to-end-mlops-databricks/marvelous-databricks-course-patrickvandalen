@@ -10,8 +10,8 @@ from pyspark.sql import SparkSession
 #     subprocess.check_call([sys.executable, "-m", "pip", "install", package])
 # dbutils.library.restartPython()
 
-from src.hotel_reservations.data_processor import DataProcessor
-from src.hotel_reservations.mlflow_processor import MLFlowProcessor
+from hotel_reservations.data_processor import DataProcessor
+from hotel_reservations.mlflow_processor import MLFlowProcessor
 
 spark = SparkSession.builder.getOrCreate()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -27,11 +27,8 @@ with open("project_config.yml", "r") as file:
 print("Configuration loaded:")
 print(yaml.dump(config, default_flow_style=False))
 
-model_name = config["catalog_name"] + "." + config["schema_name"] + "." + "hotel_reservations_model"
-model_serving_name = "hotel-reservations-model-serving"
-
 # Initialize DataProcessor
-data_processor = DataProcessor("/Volumes/" + config["catalog_name"] + "/" + config["schema_name"] + "/mlops_course/hotel_reservations.csv", config)
+data_processor = DataProcessor("/Volumes/" + config["catalog_name"] + "/" + config["schema_name"] + "/" + config["volume_name"] + "/" + config["table_name"], config)
 logger.info("DataProcessor initialized.")
 
 # Split into Train and Test data
@@ -46,6 +43,15 @@ logger.info("Data saved to catalog.")
 X_train, y_train, X_test, y_test = data_processor.get_X_y_datasets(train_set_spark, test_set_spark, spark=spark)
 logger.info("Data read from catalog.")
 
+model_name = "hotel_reservations_model"
+model_serving_name = "hotel-reservations-model-serving_new"
+experiment_name = config["experiment_name"]
+artifact_path = "lightgbm-pipeline-model"
+model_version_alias = "the_best_model"
+git_sha = "ffa63b430205ff7"
+mlflow.set_experiment(experiment_name=experiment_name)
+mlflow.set_experiment_tags({"repository_name": config["repository_name"]})
+
 # Initialize MLFlow Processor
 model = MLFlowProcessor(config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test, model_name, host, token)
 logger.info("MLFlow Processor initialized.")
@@ -55,13 +61,6 @@ model.preprocess_data(config["parameters"])
 logger.info("Pipeline created")
 
 # Start an MLflow run to track the training process
-experiment_name = config["experiment_name"]
-artifact_path = "lightgbm-pipeline-model"
-model_version_alias = "the_best_model"
-git_sha = "ffa63b430205ff7"
-mlflow.set_experiment(experiment_name=experiment_name)
-mlflow.set_experiment_tags({"repository_name": config["repository_name"]})
-
 with mlflow.start_run(
     tags={"git_sha": f"{git_sha}", "branch": config["branch"]},
 ) as run:
@@ -99,9 +98,9 @@ logger.info("Dataset loaded from registered model.")
 model_version = model.get_model_version_by_alias(model_version_alias)
 logger.info("Model version by alias loaded.")
 
-# # Create Model Serving Endpoint
-# model.create_model_serving_endpoint(model_name, model_serving_name, model_version.version)
-# logger.info("Model serving endpoint created.")
+# Create Model Serving Endpoint
+model.create_model_serving_endpoint(model_serving_name, model_version.version)
+logger.info("Model serving endpoint created.")
 
 # Call Model Serving Endpoint
 model.call_model_serving_endpoint(train_set, model_serving_name)
