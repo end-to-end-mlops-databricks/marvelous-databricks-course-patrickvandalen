@@ -9,15 +9,15 @@ from pyspark.sql import SparkSession
 # for package in ["/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl"]:
 #     subprocess.check_call([sys.executable, "-m", "pip", "install", package])
 # dbutils.library.restartPython()
-from hotel_reservations.data_processor import DataProcessor
-from hotel_reservations.mlflow_processor import MLFlowProcessor
+from src.hotel_reservations.data_processor import DataProcessor
+from src.hotel_reservations.mlflow_processor import MLFlowProcessor
 
 spark = SparkSession.builder.getOrCreate()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-token = dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiToken().get()
 host = spark.conf.get("spark.databricks.workspaceUrl")
+token = dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiToken().get()
 
 # Load configuration
 with open("project_config.yml", "r") as file:
@@ -30,7 +30,7 @@ model_name = config["catalog_name"] + "." + config["schema_name"] + "." + "hotel
 model_serving_name = "hotel-reservations-model-with-fe-serving"
 
 # Initialize DataProcessor
-data_processor = DataProcessor("/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/hotel_reservations.csv", config)
+data_processor = DataProcessor("/Volumes/" + config["catalog_name"] + "/" + config["schema_name"] + "/mlops_course/hotel_reservations.csv", config)
 logger.info("DataProcessor initialized.")
 
 # Split Train and Test data
@@ -55,7 +55,7 @@ logger.info("Data read from catalog.")
 
 # Initialize MLFlow Processor
 model_name = config["catalog_name"] + "." + config["schema_name"] + "." + "hotel_reservations_model_fe"
-model = MLFlowProcessor(config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test, model_name)
+model = MLFlowProcessor(config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test, model_name, host, token)
 logger.info("MLFlow Processor initialized.")
 
 # Create preprocessing steps and pipeline
@@ -107,14 +107,14 @@ logger.info("Dataset loaded from registered model.")
 model_version = model.get_model_version_by_alias(model_version_alias)
 logger.info("Model version by alias loaded.")
 
-# Create Online Table for Feature Table (required for model serving endpoint)
-model.create_online_table()
-logger.info("Online Table created.")
+# # Create Online Table for Feature Table (required for model serving endpoint)
+# model.create_online_table()
+# logger.info("Online Table created.")
 
-# Create Model Serving Endpoint
-model.create_model_serving_endpoint(model_name, model_serving_name, model_version.version)
-logger.info("Model serving endpoint created.")
+# # Create Model Serving Endpoint
+# model.create_model_serving_endpoint(model_name, model_serving_name, model_version.version)
+# logger.info("Model serving endpoint created.")
 
-# Call Model Serving Endpoint
-model.call_model_serving_endpoint(train_set, model_serving_name, token, host)
-logger.info("Model serving endpoint called.")
+# # Call Model Serving Endpoint
+# model.call_model_serving_endpoint(train_set, model_serving_name)
+# logger.info("Model serving endpoint called.")

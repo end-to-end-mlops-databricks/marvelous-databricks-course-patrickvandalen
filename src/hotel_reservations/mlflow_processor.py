@@ -15,27 +15,26 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.service.serving import (
-    EndpointCoreConfigInput,
-    ServedEntityInput,
-    TrafficConfig,
-    Route
-)
+# from databricks.sdk.service.serving import (
+#     EndpointCoreConfigInput,
+#     ServedEntityInput,
+#     TrafficConfig,
+#     Route
+# )
 # from databricks.sdk.service.catalog import (
 #     OnlineTableSpec,
 #     OnlineTableSpecTriggeredSchedulingPolicy
 # )
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from hotel_reservations.utils import adjust_predictions
+from src.hotel_reservations.utils import adjust_predictions
 
 mlflow.set_tracking_uri("databricks")
 mlflow.set_registry_uri("databricks-uc")  # It must be -uc for registering models to Unity Catalog
 client = MlflowClient()
-workspace = WorkspaceClient()
 
 class MLFlowProcessor:
-    def __init__(self, config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test, model_name):
+    def __init__(self, config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test, model_name, host, token):
         self.config = config
         self.train_set_spark = train_set_spark
         self.test_set_spark = test_set_spark
@@ -44,6 +43,13 @@ class MLFlowProcessor:
         self.X_test = X_test
         self.y_test = y_test
         self.model_name = model_name
+        self.host = host
+        self.token = token
+
+        try:
+            workspace = WorkspaceClient()
+        except Exception:
+            workspace = WorkspaceClient(host=self.host, token=self.token)
 
     def preprocess_data(self, parameters):
         # Create preprocessing steps for numeric and categorical data
@@ -228,42 +234,42 @@ class MLFlowProcessor:
 
         return model_version_by_tag
     
-    def create_online_table(self):
+    # def create_online_table(self):
 
-        online_table_name = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "fe_online"
-        spec = OnlineTableSpec(
-            primary_key_columns=["Id"],
-            source_table_full_name=self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "fe_table",
-            run_triggered=OnlineTableSpecTriggeredSchedulingPolicy.from_dict({"triggered": "true"}),
-            perform_full_copy=False,
-        )
+    #     online_table_name = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "fe_online"
+    #     spec = OnlineTableSpec(
+    #         primary_key_columns=["Id"],
+    #         source_table_full_name=self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "fe_table",
+    #         run_triggered=OnlineTableSpecTriggeredSchedulingPolicy.from_dict({"triggered": "true"}),
+    #         perform_full_copy=False,
+    #     )
 
-        online_table_pipeline = workspace.online_tables.create(name=online_table_name, spec=spec)
+    #     online_table_pipeline = workspace.online_tables.create(name=online_table_name, spec=spec)
     
-    def create_model_serving_endpoint(self, model_name, model_serving_name, model_version):
+    # def create_model_serving_endpoint(self, model_name, model_serving_name, model_version):
 
-        workspace.serving_endpoints.create(
-            name=model_serving_name,
-            config=EndpointCoreConfigInput(
-                served_entities=[
-                    ServedEntityInput(
-                        entity_name=model_name,
-                        scale_to_zero_enabled=True,
-                        workload_size="Small",
-                        entity_version=model_version,
-                    )
-                ],
-            # Optional if only 1 entity is served (2 is version number)
-            traffic_config=TrafficConfig(
-                routes=[
-                    Route(served_model_name=model_serving_name + "-2",
-                        traffic_percentage=100)
-                ]
-                ),
-            ),
-        )
+    #     workspace.serving_endpoints.create(
+    #         name=model_serving_name,
+    #         config=EndpointCoreConfigInput(
+    #             served_entities=[
+    #                 ServedEntityInput(
+    #                     entity_name=model_name,
+    #                     scale_to_zero_enabled=True,
+    #                     workload_size="Small",
+    #                     entity_version=model_version,
+    #                 )
+    #             ],
+    #         # Optional if only 1 entity is served (2 is version number)
+    #         traffic_config=TrafficConfig(
+    #             routes=[
+    #                 Route(served_model_name=model_serving_name + "-2",
+    #                     traffic_percentage=100)
+    #             ]
+    #             ),
+    #         ),
+    #     )
 
-    def call_model_serving_endpoint(self, train_set, model_serving_name, token, host):
+    def call_model_serving_endpoint(self, train_set, model_serving_name):
 
         required_columns = self.config["num_features"] + self.config["cat_features"]
         sampled_records = train_set[required_columns].sample(n=1000, replace=True).to_dict(orient="records")
@@ -272,11 +278,11 @@ class MLFlowProcessor:
         start_time = time.time()
 
         model_serving_endpoint = (
-            f"https://{host}/serving-endpoints/{model_serving_name}/invocations"
+            f"https://{self.host}/serving-endpoints/{model_serving_name}/invocations"
         )
         response = requests.post(
             f"{model_serving_endpoint}",
-            headers={"Authorization": f"Bearer {token}"},
+            headers={"Authorization": f"Bearer {self.token}"},
             json={"dataframe_records": dataframe_records[0]},
         )
 
@@ -287,14 +293,14 @@ class MLFlowProcessor:
         print("Reponse text:", response.text)
         print("Execution time:", execution_time, "seconds")
 
-    def model_serving_loadtest(self, train_set, model_serving_name, token, host, num_requests):
+    def model_serving_loadtest(self, train_set, model_serving_name, num_requests):
 
         required_columns = self.config["num_features"] + self.config["cat_features"]
         sampled_records = train_set[required_columns].sample(n=1000, replace=True).to_dict(orient="records")
         dataframe_records = [[record] for record in sampled_records]
 
         model_serving_endpoint = (
-            f"https://{host}/serving-endpoints/{model_serving_name}/invocations"
+            f"https://{self.host}/serving-endpoints/{model_serving_name}/invocations"
         )
 
         # Function to make a request and record latency
@@ -303,7 +309,7 @@ class MLFlowProcessor:
             start_time = time.time()
             response = requests.post(
                 model_serving_endpoint,
-                headers={"Authorization": f"Bearer {token}"},
+                headers={"Authorization": f"Bearer {self.token}"},
                 json={"dataframe_records": random_record},
             )
             end_time = time.time()

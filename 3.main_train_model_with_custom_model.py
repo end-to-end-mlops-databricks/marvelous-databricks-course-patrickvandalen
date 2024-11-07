@@ -16,6 +16,9 @@ spark = SparkSession.builder.getOrCreate()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
+host = spark.conf.get("spark.databricks.workspaceUrl")
+token = dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiToken().get()
+
 # Load configuration
 with open("project_config.yml", "r") as file:
     config = yaml.safe_load(file)
@@ -24,7 +27,7 @@ print("Configuration loaded:")
 print(yaml.dump(config, default_flow_style=False))
 
 # Initialize DataProcessor
-data_processor = DataProcessor("/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/hotel_reservations.csv", config)
+data_processor = DataProcessor("/Volumes/" + config["catalog_name"] + "/" + config["schema_name"] + "/mlops_course/hotel_reservations.csv", config)
 logger.info("DataProcessor initialized.")
 
 # Split into Train and Test data
@@ -41,7 +44,7 @@ logger.info("Data read from catalog.")
 
 # Initialize MLFlow Processor
 model_name = config["catalog_name"] + "." + config["schema_name"] + "." + "hotel_reservations_model_custom"
-model = MLFlowProcessor(config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test, model_name)
+model = MLFlowProcessor(config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test, model_name, host, token)
 logger.info("MLFlow Processor initialized.")
 
 # Create preprocessing steps and pipeline
