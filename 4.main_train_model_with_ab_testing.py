@@ -9,7 +9,6 @@ from pyspark.sql import SparkSession
 # for package in ["/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl"]:
 #     subprocess.check_call([sys.executable, "-m", "pip", "install", package])
 # dbutils.library.restartPython()
-
 from hotel_reservations.data_processor import DataProcessor
 from hotel_reservations.mlflow_processor import MLFlowProcessor
 
@@ -28,7 +27,17 @@ print("Configuration loaded:")
 print(yaml.dump(config, default_flow_style=False))
 
 # Initialize DataProcessor
-data_processor = DataProcessor("/Volumes/" + config["catalog_name"] + "/" + config["schema_name"] + "/" + config["volume_name"] + "/" + config["table_name"], config)
+data_processor = DataProcessor(
+    "/Volumes/"
+    + config["catalog_name"]
+    + "/"
+    + config["schema_name"]
+    + "/"
+    + config["volume_name"]
+    + "/"
+    + config["table_name"],
+    config,
+)
 logger.info("DataProcessor initialized.")
 
 # Split into Train and Test data
@@ -47,19 +56,20 @@ logger.info("Data read from catalog.")
 model_name = "hotel_reservations_model_ab_testing"
 model_serving_name = "hotel-reservations-model-serving-ab-testing"
 
-model = MLFlowProcessor(config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test, model_name, host, token)
+model = MLFlowProcessor(
+    config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test, model_name, host, token
+)
 logger.info("MLFlow Processor initialized.")
 
 for ab_test_models in ["model_A", "model_B"]:
-
-    if ab_test_models == 'model_A':
-        parameters = config["ab_test_parameters_a"]    
-    elif ab_test_models == 'model_B':
+    if ab_test_models == "model_A":
+        parameters = config["ab_test_parameters_a"]
+    elif ab_test_models == "model_B":
         parameters = config["ab_test_parameters_b"]
 
     # Create preprocessing steps and pipeline
     model.preprocess_data(parameters)
-    logger.info("Pipeline created") 
+    logger.info("Pipeline created")
 
     # Start an MLflow run to track the training process
     experiment_name = config["ab_test_experiment_name"]
@@ -114,7 +124,9 @@ wrapped_model, example_prediction = model.model_wrapper_ab_test(models, X_test)
 
 # Initialize MLFlow Processor
 model_name = "hotel_reservations_model_ab_testing_wrapped"
-model = MLFlowProcessor(config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test, model_name, host, token)
+model = MLFlowProcessor(
+    config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test, model_name, host, token
+)
 logger.info("MLFlow Processor initialized.")
 
 # Start an MLflow run to log and register the wrapped model
@@ -134,7 +146,7 @@ with mlflow.start_run(
     model.log_model_custom(artifact_path, wrapped_model, example_prediction)
     logger.info("Model logged to MLFlow experiment.")
 
-     # Register model to MLFlow
+    # Register model to MLFlow
     run_id = model.register_model(git_sha, model_version_alias, artifact_path, experiment_name)
     logger.info("Model register to MLFlow.")
 

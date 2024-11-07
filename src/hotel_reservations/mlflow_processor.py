@@ -1,23 +1,23 @@
-import mlflow
-import time
-import requests
-import random
-import pandas as pd
 import hashlib
-from pyspark.sql import SparkSession
+import random
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+import mlflow
+import pandas as pd
+import requests
 from databricks import feature_engineering
+from databricks.sdk import WorkspaceClient
+from databricks.sdk.service.catalog import *
 from lightgbm import LGBMRegressor
 from mlflow import MlflowClient
-from mlflow.models import infer_signature
 from mlflow.deployments import get_deploy_client
+from mlflow.models import infer_signature
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from databricks.sdk import WorkspaceClient
-from databricks.sdk.service.catalog import *
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from hotel_reservations.utils import adjust_predictions
 
@@ -26,8 +26,11 @@ mlflow.set_registry_uri("databricks-uc")  # It must be -uc for registering model
 deploy_client = get_deploy_client("databricks")
 mlflow_client = MlflowClient()
 
+
 class MLFlowProcessor:
-    def __init__(self, config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test, model_name, host, token):
+    def __init__(
+        self, config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test, model_name, host, token
+    ):
         self.config = config
         self.train_set_spark = train_set_spark
         self.test_set_spark = test_set_spark
@@ -65,9 +68,7 @@ class MLFlowProcessor:
             ]
         )
 
-        self.model = Pipeline(
-            steps=[("preprocessor", preprocessor), ("regressor", LGBMRegressor(**parameters))]
-        )
+        self.model = Pipeline(steps=[("preprocessor", preprocessor), ("regressor", LGBMRegressor(**parameters))])
 
     def train(self):
         self.model.fit(self.X_train, self.y_train)
@@ -93,13 +94,13 @@ class MLFlowProcessor:
 
         return wrapped_model, example_prediction
 
-    def model_wrapper_ab_test(self, models, X_test):        
+    def model_wrapper_ab_test(self, models, X_test):
         class HousePriceModelWrapper(mlflow.pyfunc.PythonModel):
             def __init__(self, model):
                 self.model = model
                 self.model_a = models[0]
                 self.model_b = models[1]
-               
+
             def predict(self, context, model_input):
                 if isinstance(model_input, pd.DataFrame):
                     house_id = str(model_input["Booking_ID"].str[-5:].values[0])
@@ -227,9 +228,8 @@ class MLFlowProcessor:
         model_version_by_tag = mlflow_client.search_model_versions(filter_string)
 
         return model_version_by_tag
-    
-    def create_online_table(self):
 
+    def create_online_table(self):
         online_table_name = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "fe_online"
         spec = OnlineTableSpec(
             primary_key_columns=["Booking_ID"],
@@ -239,9 +239,8 @@ class MLFlowProcessor:
         )
 
         online_table_pipeline = workspace.online_tables.create(name=online_table_name, spec=spec)
-    
-    def create_model_serving_endpoint(self, model_serving_name, model_version):
 
+    def create_model_serving_endpoint(self, model_serving_name, model_version):
         endpoint = deploy_client.create_endpoint(
             name=model_serving_name,
             config={
@@ -250,31 +249,23 @@ class MLFlowProcessor:
                         "entity_name": self.full_model_path,
                         "entity_version": "1",
                         "workload_size": "Small",
-                        "scale_to_zero_enabled": True
+                        "scale_to_zero_enabled": True,
                     }
                 ],
                 "traffic_config": {
-                    "routes": [
-                        {
-                            "served_model_name": f"{self.model_name}-1",
-                            "traffic_percentage": 100
-                        }
-                    ]
-                }
-            }
+                    "routes": [{"served_model_name": f"{self.model_name}-1", "traffic_percentage": 100}]
+                },
+            },
         )
 
     def call_model_serving_endpoint(self, train_set, model_serving_name):
-
         required_columns = self.config["num_features"] + self.config["cat_features"]
         sampled_records = train_set[required_columns].sample(n=1000, replace=True).to_dict(orient="records")
         dataframe_records = [[record] for record in sampled_records]
 
         start_time = time.time()
 
-        model_serving_endpoint = (
-            f"https://{self.host}/serving-endpoints/{model_serving_name}/invocations"
-        )
+        model_serving_endpoint = f"https://{self.host}/serving-endpoints/{model_serving_name}/invocations"
         response = requests.post(
             f"{model_serving_endpoint}",
             headers={"Authorization": f"Bearer {self.token}"},
@@ -289,14 +280,11 @@ class MLFlowProcessor:
         print("Execution time:", execution_time, "seconds")
 
     def model_serving_loadtest(self, train_set, model_serving_name, num_requests):
-
         required_columns = self.config["num_features"] + self.config["cat_features"]
         sampled_records = train_set[required_columns].sample(n=1000, replace=True).to_dict(orient="records")
         dataframe_records = [[record] for record in sampled_records]
 
-        model_serving_endpoint = (
-            f"https://{self.host}/serving-endpoints/{model_serving_name}/invocations"
-        )
+        model_serving_endpoint = f"https://{self.host}/serving-endpoints/{model_serving_name}/invocations"
 
         # Function to make a request and record latency
         def send_request():
@@ -310,7 +298,7 @@ class MLFlowProcessor:
             end_time = time.time()
             latency = end_time - start_time
             return response.status_code, latency
-        
+
         total_start_time = time.time()
         latencies = []
 

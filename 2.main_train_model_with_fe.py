@@ -9,7 +9,6 @@ from pyspark.sql import SparkSession
 # for package in ["/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl"]:
 #     subprocess.check_call([sys.executable, "-m", "pip", "install", package])
 # dbutils.library.restartPython()
-
 from hotel_reservations.data_processor import DataProcessor
 from hotel_reservations.mlflow_processor import MLFlowProcessor
 
@@ -28,7 +27,17 @@ print("Configuration loaded:")
 print(yaml.dump(config, default_flow_style=False))
 
 # Initialize DataProcessor
-data_processor = DataProcessor("/Volumes/" + config["catalog_name"] + "/" + config["schema_name"] + "/" + config["volume_name"] + "/" + config["table_name"], config)
+data_processor = DataProcessor(
+    "/Volumes/"
+    + config["catalog_name"]
+    + "/"
+    + config["schema_name"]
+    + "/"
+    + config["volume_name"]
+    + "/"
+    + config["table_name"],
+    config,
+)
 logger.info("DataProcessor initialized.")
 
 # Split Train and Test data
@@ -61,7 +70,9 @@ mlflow.set_experiment(experiment_name=experiment_name)
 mlflow.set_experiment_tags({"repository_name": config["repository_name"]})
 
 # Initialize MLFlow Processor
-model = MLFlowProcessor(config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test, model_name, host, token)
+model = MLFlowProcessor(
+    config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test, model_name, host, token
+)
 logger.info("MLFlow Processor initialized.")
 
 # Create preprocessing steps and pipeline
