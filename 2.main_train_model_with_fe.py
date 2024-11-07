@@ -16,6 +16,21 @@ spark = SparkSession.builder.getOrCreate()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
+
+def get_dbutils(spark):
+    try:
+        from pyspark.dbutils import DBUtils
+
+        dbutils = DBUtils(spark)
+    except ImportError:
+        import IPython
+
+        dbutils = IPython.get_ipython().user_ns["dbutils"]
+    return dbutils
+
+
+dbutils = get_dbutils(spark)
+
 host = spark.conf.get("spark.databricks.workspaceUrl")
 token = dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiToken().get()
 

@@ -8,7 +8,10 @@ import pandas as pd
 import requests
 from databricks import feature_engineering
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.service.catalog import *
+from databricks.sdk.service.catalog import (
+    OnlineTableSpec,
+    OnlineTableSpecTriggeredSchedulingPolicy,
+)
 from lightgbm import LGBMRegressor
 from mlflow import MlflowClient
 from mlflow.deployments import get_deploy_client
@@ -44,9 +47,9 @@ class MLFlowProcessor:
         self.token = token
 
         try:
-            workspace = WorkspaceClient()
+            self.workspace = WorkspaceClient()
         except Exception:
-            workspace = WorkspaceClient(host=self.host, token=self.token)
+            self.workspace = WorkspaceClient(host=self.host, token=self.token)
 
     def preprocess_data(self, parameters):
         # Create preprocessing steps for numeric and categorical data
@@ -238,10 +241,10 @@ class MLFlowProcessor:
             perform_full_copy=False,
         )
 
-        online_table_pipeline = workspace.online_tables.create(name=online_table_name, spec=spec)
+        self.workspace.online_tables.create(name=online_table_name, spec=spec)
 
     def create_model_serving_endpoint(self, model_serving_name, model_version):
-        endpoint = deploy_client.create_endpoint(
+        deploy_client.create_endpoint(
             name=model_serving_name,
             config={
                 "served_entities": [
