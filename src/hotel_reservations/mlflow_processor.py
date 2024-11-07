@@ -16,10 +16,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.service.catalog import (
-    OnlineTableSpec,
-    OnlineTableSpecTriggeredSchedulingPolicy
-)
+from databricks.sdk.service.catalog import *
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from hotel_reservations.utils import adjust_predictions
@@ -231,17 +228,17 @@ class MLFlowProcessor:
 
         return model_version_by_tag
     
-    # def create_online_table(self):
+    def create_online_table(self):
 
-    #     online_table_name = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "fe_online"
-    #     spec = OnlineTableSpec(
-    #         primary_key_columns=["Booking_ID"],
-    #         source_table_full_name=self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "fe_table",
-    #         run_triggered=OnlineTableSpecTriggeredSchedulingPolicy.from_dict({"triggered": "true"}),
-    #         perform_full_copy=False,
-    #     )
+        online_table_name = self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "fe_online"
+        spec = OnlineTableSpec(
+            primary_key_columns=["Booking_ID"],
+            source_table_full_name=self.config["catalog_name"] + "." + self.config["schema_name"] + "." + "fe_table",
+            run_triggered=OnlineTableSpecTriggeredSchedulingPolicy.from_dict({"triggered": "true"}),
+            perform_full_copy=False,
+        )
 
-    #     online_table_pipeline = workspace.online_tables.create(name=online_table_name, spec=spec)
+        online_table_pipeline = workspace.online_tables.create(name=online_table_name, spec=spec)
     
     def create_model_serving_endpoint(self, model_serving_name, model_version):
 

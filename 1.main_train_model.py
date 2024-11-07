@@ -44,7 +44,7 @@ X_train, y_train, X_test, y_test = data_processor.get_X_y_datasets(train_set_spa
 logger.info("Data read from catalog.")
 
 model_name = "hotel_reservations_model"
-model_serving_name = "hotel-reservations-model-serving_new"
+model_serving_name = "hotel-reservations-model-serving"
 experiment_name = config["experiment_name"]
 artifact_path = "lightgbm-pipeline-model"
 model_version_alias = "the_best_model"

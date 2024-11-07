@@ -1,5 +1,5 @@
-catalog_name: main
-schema_name: patrick_mlops_new
+catalog_name: mdl_europe_anz_dev
+schema_name: patrick_mlops
 volume_name: mlops_course
 table_name: hotel_reservations.csv
 
