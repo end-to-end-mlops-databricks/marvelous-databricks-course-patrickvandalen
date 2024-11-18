@@ -1,5 +1,7 @@
 catalog_name: mdl_europe_anz_dev
 schema_name: patrick_mlops
+volume_name: mlops_course
+table_name: hotel_reservations.csv
 
 repository_name: "Patrick_MLOps"
 experiment_name: "/Shared/Hotel_Reservations"
@@ -9,6 +11,18 @@ parameters:
   learning_rate: 0.01
   n_estimators: 1000
   max_depth: 6
+
+ab_test_experiment_name: "/Shared/Hotel_Reservations_AB_Testing"
+
+ab_test_parameters_a:
+  learning_rate_a: 0.02
+  max_depth_a: 6
+  n_estimators: 1000
+
+ab_test_parameters_b:
+  learning_rate_b: 0.02
+  max_depth_b: 10
+  n_estimators: 1000
 
 num_features:
   - no_of_adults

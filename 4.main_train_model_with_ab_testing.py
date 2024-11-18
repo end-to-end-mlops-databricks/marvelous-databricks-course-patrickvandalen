@@ -68,27 +68,37 @@ X_train, y_train, X_test, y_test = data_processor.get_X_y_datasets(train_set_spa
 logger.info("Data read from catalog.")
 
 # Initialize MLFlow Processor
-model_name = "hotel_reservations_model_custom"
-experiment_name = config["experiment_name"]
-artifact_path = "lightgbm-pipeline-model"
-model_version_alias = "the_best_model"
-git_sha = "ffa63b430205ff7"
-mlflow.set_experiment(experiment_name=experiment_name)
-mlflow.set_experiment_tags({"repository_name": config["repository_name"]})
+model_name = "hotel_reservations_model_ab_testing"
+model_serving_name = "hotel-reservations-model-serving-ab-testing"
 
 model = MLFlowProcessor(
     config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test, model_name, host, token
 )
 logger.info("MLFlow Processor initialized.")
 
-# Create preprocessing steps and pipeline
-model.preprocess_data(config["parameters"])
-logger.info("Pipeline created")
+for ab_test_models in ["model_A", "model_B"]:
+    if ab_test_models == "model_A":
+        parameters = config["ab_test_parameters_a"]
+    elif ab_test_models == "model_B":
+        parameters = config["ab_test_parameters_b"]
 
-# Start an MLflow run to track the training process
-with mlflow.start_run(
-    tags={"git_sha": f"{git_sha}", "branch": config["branch"]},
-) as run:
+    # Create preprocessing steps and pipeline
+    model.preprocess_data(parameters)
+    logger.info("Pipeline created")
+
+    # Start an MLflow run to track the training process
+    experiment_name = config["ab_test_experiment_name"]
+    artifact_path = "lightgbm-pipeline-model"
+    model_version_alias = ab_test_models
+    git_sha = "ffa63b430205ff7"
+    mlflow.set_experiment(experiment_name=experiment_name)
+    mlflow.set_experiment_tags({"repository_name": config["repository_name"]})
+
+    mlflow.start_run(
+        tags={"model_class": ab_test_models, "git_sha": f"{git_sha}", "branch": config["branch"]},
+    )
+
+    run = mlflow.active_run()
     run_id = run.info.run_id
 
     # Train model and create MLFlow experiment
@@ -99,13 +109,53 @@ with mlflow.start_run(
     model.predict()
     logger.info("Model predictions created.")
 
-    # Wrap custom model
-    wrapped_model, example_prediction = model.model_wrapper(X_test)
-    logger.info("Model wrapped.")
-
     # Evaluate model and log metrics to MLFlow experiment
-    model.evaluate(config["parameters"])
+    model.evaluate(parameters)
     logger.info("Model evaluated and logged in MLFlow experiment.")
+
+    # Log model to MLFlow experiment
+    model.log_model(artifact_path)
+    logger.info("Model logged to MLFlow experiment.")
+
+    # Register model to MLFlow
+    run_id = model.register_model(git_sha, model_version_alias, artifact_path, experiment_name)
+    logger.info("Model register to MLFlow.")
+
+    mlflow.end_run()
+
+# Load registered model A
+model_version_alias = "model_A"
+model_A = model.load_model(model_version_alias)
+logger.info("Loaded Model A.")
+
+# Load registered model B
+model_version_alias = "model_B"
+model_B = model.load_model(model_version_alias)
+logger.info("Loaded Model B.")
+
+# Wrap models A and B using hash for split
+models = [model_A, model_B]
+wrapped_model, example_prediction = model.model_wrapper_ab_test(models, X_test)
+
+# Initialize MLFlow Processor
+model_name = "hotel_reservations_model_ab_testing_wrapped"
+model = MLFlowProcessor(
+    config, train_set_spark, test_set_spark, X_train, y_train, X_test, y_test, model_name, host, token
+)
+logger.info("MLFlow Processor initialized.")
+
+# Start an MLflow run to log and register the wrapped model
+experiment_name = config["ab_test_experiment_name"]
+artifact_path = "pyfunc-house-price-model-ab"
+model_version_alias = "wrapped_model"
+git_sha = "ffa63b430205ff7"
+mlflow.set_experiment(experiment_name=experiment_name)
+mlflow.set_experiment_tags({"repository_name": config["repository_name"]})
+
+with mlflow.start_run(
+    tags={"git_sha": f"{git_sha}", "branch": config["branch"]},
+) as run:
+    run_id = run.info.run_id
 
     # Log model to MLFlow experiment
     model.log_model_custom(artifact_path, wrapped_model, example_prediction)
@@ -115,14 +165,19 @@ with mlflow.start_run(
     run_id = model.register_model(git_sha, model_version_alias, artifact_path, experiment_name)
     logger.info("Model register to MLFlow.")
 
-# Load custom model
-loaded_model = model.load_custom_model(run_id, artifact_path)
-
 # Load dataset from registered model
 dataset_source = model.load_dataset_from_model(run_id)
 dataset_source.load()
 logger.info("Dataset loaded from registered model.")
 
 # Get model version by alias
-model_version_by_alias = model.get_model_version_by_alias(model_version_alias)
+model_version = model.get_model_version_by_alias(model_version_alias)
 logger.info("Model version by alias loaded.")
+
+# Create Model Serving Endpoint
+model.create_model_serving_endpoint(model_serving_name, model_version.version)
+logger.info("Model serving endpoint created.")
+
+# Call Model Serving Endpoint
+model.call_model_serving_endpoint(train_set, model_serving_name)
+logger.info("Model serving endpoint called.")
