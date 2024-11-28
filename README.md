@@ -36,6 +36,15 @@ copy wheel:
 
 ```
 uv build
-databricks fs cp dist/mlops_with_databricks-0.0.1.tar.gz /Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl
+databricks fs cp dist/mlops_with_databricks-0.0.1.tar.gz dbfs:/Volumes/mdl_europe_anz_dev/patrick_mlops/mlops_course/mlops_with_databricks-0.0.1-py3-none-any.whl
 
 ```
+
+if databricks-cli does not work anymore, then run:
+pip install databricks-cli
+
+----
+
+deploy bundle in the bundle resource explorer or run:
+databricks bundle validate
+databricks bundle deploy

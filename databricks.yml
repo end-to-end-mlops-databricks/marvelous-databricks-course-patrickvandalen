@@ -3,7 +3,51 @@
 # See https://docs.databricks.com/dev-tools/bundles/index.html for documentation.
 
 bundle:
-  name: marvelous-databricks-course-patrickvandalen
+  name: marvelous-databricks-course-patrickvandalen_new
+
+variables:
+  root_path:
+    description: root_path for the target
+    default: /Users/patrick-van.dalen@unilever.com/.bundle/${bundle.name}/dev
+  git_sha:
+    description: git_sha
+    default: abcd
+  schedule_pause_status:
+    description: schedule pause status
+    default: UNPAUSED
+
+resources:
+  jobs:
+    hotel-reservations:
+      name: hotel-reservations-workflow-patrick-mlops_testing
+      schedule:
+        quartz_cron_expression: "0 0 6 ? * MON"
+        timezone_id: "Europe/Amsterdam"
+        pause_status: UNPAUSED
+      tags:
+        project_name: "hotel-reservations"
+      job_clusters:
+        - job_cluster_key: "hotel-reservations-cluster"
+          new_cluster:
+            spark_version: "15.4.x-scala2.12"
+            data_security_mode: "SINGLE_USER"
+            node_type_id: "Standard_DS3_v2"
+            driver_node_type_id: "Standard_DS3_v2"
+            autoscale:
+              min_workers: 1
+              max_workers: 1
+
+      tasks:
+        - task_key: "preprocessing"
+          # job_cluster_key: "hotel-reservations-cluster"
+          existing_cluster_id: 1021-080056-st9yuq1
+          spark_python_task:
+            python_file: "1.main_train_model.py"
+            # parameters:
+            #   - "--root_path"
+            #   - ${var.root_path}
+          libraries:
+           - whl: ./dist/*.whl
 
 targets:
   dev:
@@ -11,6 +55,7 @@ targets:
     default: true
     workspace:
       host: https://adb-2883625318878959.19.azuredatabricks.net/
+      root_path: ${var.root_path}
 
   ## Optionally, there could be 'staging' or 'prod' targets here.
   #
