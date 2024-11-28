@@ -36,7 +36,7 @@ resources:
             autoscale:
               min_workers: 1
               max_workers: 1
-        
+
       tasks:
         - task_key: "preprocessing"
           # job_cluster_key: "hotel-reservations-cluster"
